@@ -1,0 +1,33 @@
+/* src/index.css */
+
+/* Tailwind CSS Directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  يمكن أن يحتوي هذا الملف أيضًا على أنماط CSS عامة أخرى
+  التي قد تكون موجودة افتراضيًا في مشروع Create React App
+  أو التي قد تكون أضفتها بنفسك.
+
+  على سبيل المثال، قد تجد أنماطًا مثل:
+*/
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/*
+  إذا كانت لديك أي أنماط CSS مخصصة أخرى تريد تطبيقها عالميًا،
+  يمكنك إضافتها هنا بعد توجيهات Tailwind.
+*/

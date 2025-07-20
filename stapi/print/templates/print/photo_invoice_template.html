@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>فاتورة جلسة التصوير</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+            @frame footer {
+                -pdf-frame-content: footer-content;
+                bottom: 0cm;
+                margin-left: 1cm;
+                margin-right: 1cm;
+                height: 1cm;
+            }
+        }
+        body {
+            font-family: 'Arial', sans-serif; /* يمكنك تغيير الخط لخط عربي يدعم في WeasyPrint */
+            line-height: 1.6;
+            color: #333;
+            font-size: 10pt;
+        }
+        .container {
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #eee;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #FF9800; /* لون برتقالي للتصوير */
+            padding-bottom: 10px;
+        }
+        .header h1 {
+            margin: 0;
+            color: #FF9800;
+            font-size: 24pt;
+        }
+        .header p {
+            margin: 0;
+            font-size: 10pt;
+            color: #555;
+        }
+        .logo {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 10px;
+        }
+        .invoice-details, .client-details, .session-details, .payments-table {
+            margin-bottom: 20px;
+            border: 1px solid #eee;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .invoice-details h2, .client-details h2, .session-details h2, .payments-table h2 {
+            color: #FF9800;
+            font-size: 14pt;
+            margin-top: 0;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .invoice-details p, .client-details p, .session-details p {
+            margin: 5px 0;
+        }
+        .payments-table table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .payments-table th, .payments-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: right;
+        }
+        .payments-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .totals {
+            margin-top: 20px;
+            text-align: left;
+            border-top: 2px solid #FF9800;
+            padding-top: 10px;
+        }
+        .totals p {
+            margin: 5px 0;
+            font-size: 12pt;
+        }
+        .totals .total-amount {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #FF9800;
+        }
+        .qr-code {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .qr-code img {
+            max-width: 120px;
+            height: auto;
+        }
+        .footer {
+            text-align: center;
+            font-size: 8pt;
+            color: #777;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            {% if company_logo_absolute_url %}
+                <img src="{{ company_logo_absolute_url }}" alt="Company Logo" class="logo">
+            {% endif %}
+            <h1>{{ company.name }}</h1>
+            <p>{{ company.address }}</p>
+            <p>الهاتف: {{ company.phone }} | البريد الإلكتروني: {{ company.email }}</p>
+            <p>الموقع الإلكتروني: {{ company.website }} | الرقم الضريبي: {{ company.tax_id }}</p>
+        </div>
+
+        <div class="invoice-details">
+            <h2>تفاصيل الفاتورة</h2>
+            <p><strong>رقم الفاتورة:</strong> {{ photo_session.receipt_number }}</p>
+            <p><strong>تاريخ الإصدار:</strong> {{ photo_session.created_at|date:"Y-m-d H:i" }}</p>
+            <p><strong>حالة الجلسة:</strong> {{ photo_session.get_status_display }}</p>
+        </div>
+
+        <div class="client-details">
+            <h2>تفاصيل العميل</h2>
+            <p><strong>اسم العميل:</strong> {{ client.name }}</p>
+            <p><strong>رقم الهاتف:</strong> {{ client.phone|default:"-" }}</p>
+            <p><strong>البريد الإلكتروني:</strong> {{ client.email|default:"-" }}</p>
+            <p><strong>العنوان:</strong> {{ client.address|default:"-" }}</p>
+        </div>
+
+        <div class="session-details">
+            <h2>تفاصيل جلسة التصوير</h2>
+            <p><strong>الباقة:</strong> {{ photo_session.package.name|default:"غير محددة" }}</p>
+            <p><strong>المصور:</strong> {{ photo_session.photographer.name|default:"غير محدد" }}</p>
+            <p><strong>تاريخ الجلسة:</strong> {{ photo_session.session_date|date:"Y-m-d" }}</p>
+            <p><strong>وقت الجلسة:</strong> {{ photo_session.session_time|date:"H:i"|default:"-" }}</p>
+            <p><strong>الموقع:</strong> {{ photo_session.location|default:"-" }}</p>
+            <p><strong>المبلغ الإجمالي للجلسة:</strong> {{ photo_session.total_amount|floatformat:2 }}</p>
+            <p><strong>ملاحظات:</strong> {{ photo_session.notes|default:"لا توجد ملاحظات" }}</p>
+            <p><strong>صدر عن:</strong> {{ photo_session.issued_by.username|default:"غير محدد" }}</p>
+            <p><strong>الصور الرقمية تم تسليمها:</strong> {% if photo_session.digital_photos_delivered %}نعم{% else %}لا{% endif %}</p>
+            <p><strong>الصور المطبوعة تم تسليمها:</strong> {% if photo_session.printed_photos_delivered %}نعم{% else %}لا{% endif %}</p>
+            <p><strong>الألبوم تم تسليمه:</strong> {% if photo_session.album_delivered %}نعم{% else %}لا{% endif %}</p>
+            <p><strong>الإطار تم تسليمه:</strong> {% if photo_session.frame_delivered %}نعم{% else %}لا{% endif %}</p>
+        </div>
+
+        {% if receipts %}
+        <div class="payments-table">
+            <h2>تفاصيل الدفعات</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>رقم الإيصال</th>
+                        <th>المبلغ المدفوع</th>
+                        <th>طريقة الدفع</th>
+                        <th>تاريخ الدفعة</th>
+                        <th>صدر عن</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for receipt in receipts %}
+                    <tr>
+                        <td>{{ receipt.receipt_number }}</td>
+                        <td>{{ receipt.paid_amount|floatformat:2 }}</td>
+                        <td>{{ receipt.get_payment_method_display }}</td>
+                        <td>{{ receipt.date_issued|date:"Y-m-d H:i" }}</td>
+                        <td>{{ receipt.issued_by.username|default:"غير محدد" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <div class="totals">
+            <p><strong>المبلغ الإجمالي للجلسة:</strong> {{ photo_session.total_amount|floatformat:2 }}</p>
+            <p><strong>إجمالي المبلغ المدفوع:</strong> {{ photo_session.paid_amount|floatformat:2 }}</p>
+            <p class="total-amount"><strong>المبلغ المتبقي:</strong> {{ photo_session.remaining_amount|floatformat:2 }}</p>
+        </div>
+
+        <div class="qr-code">
+            {% if qr_code_base64 %}
+                <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR Code">
+                <p>امسح الكود لعرض تفاصيل الجلسة</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div id="footer-content">
+        <div class="footer">
+            <p>شكرًا لتعاملك مع {{ company.name }}.</p>
+            <p>للاستفسارات، يرجى التواصل معنا.</p>
+        </div>
+    </div>
+</body>
+</html>

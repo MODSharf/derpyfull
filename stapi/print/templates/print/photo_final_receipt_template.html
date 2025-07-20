@@ -1,0 +1,512 @@
+{% load static %}<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فاتورة جلسة تصوير - {{ photo_session.receipt_number }}</title>
+    <style>
+        /* Using Noto Sans Arabic for better Arabic typography support in PDF generation */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;700&display=swap');
+        /* Fallback to Inter for general elements if Noto Sans Arabic doesn't cover everything */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans Arabic', 'Inter', sans-serif; /* Prioritize Noto Sans Arabic */
+            margin: 0;
+            padding: 8mm; /* Reduced page padding */
+            background-color: #f8f9fa;
+            color: #343a40;
+            line-height: 1.3; /* Reduced line height for tighter text */
+            font-size: 10.5px; /* Reduced base font size */
+            direction: rtl;
+            text-align: right;
+        }
+        .container {
+            width: 100%; /* Maximize width within page padding */
+            margin: 0 auto;
+            background-color: #fff;
+            border-radius: 6px;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.08);
+            padding: 12px; /* Reduced container padding */
+            border: 1px solid #e9ecef;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 8px; /* Reduced padding */
+            margin-bottom: 10px;
+            border-bottom: 2px solid {{ final_receipt_color }};
+        }
+        .header .company-info {
+            text-align: right;
+        }
+        .header .company-info h1 {
+            margin: 0;
+            font-size: 20px; /* Reduced font size */
+            color: #343a40;
+        }
+        .header .company-info p {
+            margin: 1px 0; /* Minimal margin */
+            font-size: 9.5px; /* Reduced font size */
+            color: #6c757d;
+        }
+        .header .logo {
+            max-width: 65px; /* Reduced logo size */
+            height: auto;
+            border-radius: 4px;
+        }
+        .receipt-title {
+            text-align: center;
+            font-size: 18px; /* Reduced font size */
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            padding: 5px 0; /* Reduced padding */
+            background-color: {{ final_receipt_color }}; /* Light blue background */
+            color: #333;
+            border-radius: 4px;
+        }
+        .section-title {
+            font-size: 13px; /* Reduced font size */
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 6px; /* Reduced margin */
+            padding-bottom: 2px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .info-grid {
+            display: grid;
+            /* Changed to fixed 3 columns for better horizontal distribution */
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px 8px; /* Reduced vertical and horizontal gap */
+            margin-bottom: 8px; /* Reduced margin */
+        }
+        .info-grid p {
+            margin: 0;
+            padding: 1px 0; /* Minimal padding */
+            display: flex;
+            align-items: center;
+            font-size: 10px; /* Specific font size for detail items */
+        }
+        .info-grid p strong {
+            color: #000;
+            margin-left: 2px; /* Minimal space */
+            white-space: nowrap; /* Prevent label from wrapping */
+        }
+        .info-grid .icon {
+            width: 11px; /* Reduced icon size */
+            height: 11px;
+            margin-left: 5px; /* Reduced space */
+            fill: #6c757d;
+        }
+        .financial-summary {
+            background-color: #e9f5ff; /* Light blue background */
+            border: 1px solid #cce5ff;
+            border-radius: 8px;
+            padding: 10px; /* Reduced padding */
+            margin-top: 15px; /* Reduced margin */
+            margin-bottom: 15px; /* Reduced margin */
+        }
+        .financial-summary p {
+            margin: 3px 0; /* Reduced margin */
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px; /* Adjusted font size */
+        }
+        .financial-summary p strong {
+            color: #000;
+        }
+        .financial-summary .total-amount {
+            font-size: 14px; /* Adjusted font size */
+            font-weight: bold;
+            color: #007bff;
+        }
+        .financial-summary .paid-amount {
+            font-size: 13px; /* Adjusted font size */
+            color: #28a745;
+        }
+        .financial-summary .remaining-amount {
+            font-size: 16px; /* Adjusted font size */
+            font-weight: bold;
+            color: #dc3545;
+            border-top: 1px solid #cce5ff;
+            padding-top: 5px; /* Reduced padding */
+            margin-top: 5px; /* Reduced margin */
+        }
+        .notes-section {
+            margin-top: 10px; /* Reduced margin */
+            padding: 8px; /* Reduced padding */
+            border: 1px solid #e0f2f7; /* Light blue border for notes */
+            background-color: #f7fcfe; /* Very light blue background */
+            border-radius: 6px;
+        }
+        .notes-section p {
+            margin: 2px 0; /* Reduced margin */
+            font-size: 10.5px; /* Adjusted font size */
+            color: #555;
+        }
+        .qr-code {
+            text-align: center;
+            margin-top: 15px; /* Reduced margin */
+            padding-top: 10px; /* Reduced padding */
+            border-top: 1px dashed #dee2e6;
+        }
+        .qr-code img {
+            max-width: 50px; /* Reduced QR code size */
+            height: auto;
+            border: 1px solid #dee2e6;
+            padding: 2px;
+            background-color: #fff;
+        }
+        .qr-code p {
+            font-size: 9.5px; /* Adjusted font size for QR text */
+            margin-top: 3px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 15px; /* Reduced margin */
+            font-size: 8.5px; /* Reduced font size */
+            color: #6c757d;
+            border-top: 1px solid #e9ecef;
+            padding-top: 8px; /* Reduced padding */
+        }
+        .footer p {
+            margin: 1px 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 6px; /* Reduced padding */
+            border-radius: 10px; /* Smaller border radius */
+            font-size: 9.5px; /* Reduced font size */
+            font-weight: bold;
+            color: #fff;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: middle;
+            margin-right: 3px; /* Reduced margin */
+        }
+        .badge-green { background-color: #28a745; }
+        .badge-blue { background-color: #007bff; }
+        .badge-orange { background-color: #fd7e14; }
+        .badge-red { background-color: #dc3545; }
+        .badge-purple { background-color: #6f42c1; }
+        .badge-teal { background-color: #20c997; }
+        .badge-gray { background-color: #6c757d; }
+
+        .receipts-list {
+            margin-top: 15px; /* Reduced margin */
+            border-top: 1px dashed #dee2e6;
+            padding-top: 10px; /* Reduced padding */
+        }
+        .receipt-item {
+            background-color: #f1f7fc;
+            border: 1px solid #d6e9f8;
+            border-radius: 4px;
+            padding: 8px; /* Reduced padding */
+            margin-bottom: 5px; /* Reduced margin */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px; /* Adjusted font size */
+        }
+        .receipt-item div {
+            flex: 1;
+        }
+        .receipt-item p {
+            margin: 1px 0; /* Minimal margin */
+        }
+        .receipt-item .amount {
+            font-weight: bold;
+            color: #28a745;
+            font-size: 11px; /* Adjusted font size */
+        }
+        .delivery-status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* Keep 2 columns for clarity here */
+            gap: 2mm 5mm;
+            margin-top: 5mm;
+            margin-bottom: 10mm;
+            font-size: 10.5px; /* Adjusted font size */
+        }
+        .delivery-status-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 3px; /* Reduced margin */
+        }
+        .delivery-status-item .icon {
+            width: 12px; /* Reduced icon size */
+            height: 12px;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+        .check-icon { fill: #28a745; }
+        .x-icon { fill: #dc3545; }
+
+        /* Ensure content fits on one page for print */
+        @page {
+            size: A4;
+            margin: 5mm; /* Minimal page margin */
+        }
+        body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="company-info">
+                <h1>{{ company.name }}</h1>
+                <p>{{ company.address }}</p>
+                <p>هاتف: {{ company.phone }} | بريد إلكتروني: {{ company.email }}</p>
+                <p>موقع إلكتروني: {{ company.website }}</p>
+                <p>الرقم الضريبي: {{ company.tax_id }}</p>
+            </div>
+            {% if company_logo_absolute_url %}
+                <img src="{{ company_logo_absolute_url }}" alt="شعار الشركة" class="logo">
+            {% endif %}
+        </div>
+
+        <div class="receipt-title">
+            إيصال جلسة تصوير نهائي
+        </div>
+
+        <h2 class="section-title">تفاصيل الإيصال</h2>
+        <div class="info-grid">
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M13 7H6v2h7V7zm0 4H6v2h7v-2zm0 4H6v2h7v-2zm-2 2H4v-2h7v2zm2-4H4v-2h9v2zm0-4H4V7h9v2zM4 20h17v-2H4v2zM21 4H4v2h17V4z"/></svg>
+                <strong>رقم الإيصال:</strong> {{ photo_session.receipt_number }}
+            </p>
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h2v2H7v-2zm-2 0h2v2H5v-2zm4 0h2v2H9v-2zm2 0h2v2h-2v-2zm2 0h2v2h-2v-2zm2 0h2v2h-2v-2z"/></svg>
+                <strong>تاريخ الإصدار:</strong> {{ photo_session.created_at|date:"Y-m-d H:i" }}
+            </p>
+        </div>
+
+        <h2 class="section-title">تفاصيل العميل</h2>
+        <div class="info-grid">
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                <strong>اسم العميل:</strong> {{ client.name }}
+            </p>
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.01.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.2c.27-.27.35-.66.24-1.01C8.7 6.45 8.5 5.25 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z"/></svg>
+                <strong>رقم الهاتف:</strong> {{ client.phone }}
+            </p>
+            {% if client.email %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                <strong>البريد الإلكتروني:</strong> {{ client.email }}
+            </p>
+            {% endif %}
+            {% if client.address %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
+                <strong>العنوان:</strong> {{ client.address }}
+            </p>
+            {% endif %}
+        </div>
+
+        <h2 class="section-title">تفاصيل جلسة التصوير</h2>
+        <div class="info-grid">
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h2v2H7v-2zm-2 0h2v2H5v-2zm4 0h2v2H9v-2zm2 0h2v2h-2v-2zm2 0h2v2h-2v-2zm2 0h2v2h-2v-2z"/></svg>
+                <strong>تاريخ التصوير:</strong> {{ photo_session.session_date|date:"Y-m-d" }}
+            </p>
+            {% if photo_session.session_time %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm.9 14.2c-.3-.18-.5-.5-.5-.88V9c0-.55-.45-1-1-1s-1 .45-1 1v5c0 .41.17.79.44 1.06l3.25 3.25c.39.39 1.02.39 1.41 0 .39-.39.39-1.02 0-1.41L12.9 16.2z"/></svg>
+                <strong>وقت الجلسة:</strong> {{ photo_session.session_time|default:"-" }}
+            </p>
+            {% endif %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 12c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0-10C7.58 2 4 5.58 4 10c0 4.42 8 12 8 12s8-7.58 8-12c0-4.42-3.58-8-8-8zM7 9c0-1.66 1.34-3 3-3s3 1.34 3 3-1.34 3-3 3-3-1.34-3-3z"/></svg>
+                <strong>نوع التصوير:</strong> {{ photo_session.get_event_type_display }}
+            </p>
+            {% if photo_session.location %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
+                <strong>الموقع:</strong> {{ photo_session.location }}
+            </p>
+            {% endif %}
+            {% if photo_session.package %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 18V6h16v12H4zm2-7h3V9H6v2zm0 4h3v-2H6v2zm4-4h3V9h-3v2zm0 4h3v-2h-3v2zm4-4h3V9h-3v2zm0 4h3v-2h-3v2z"/></svg>
+                <strong>الباقة:</strong> {{ photo_session.package.name }}
+            </p>
+            {% endif %}
+            {% if photo_session.photographer %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                <strong>المصور:</strong> {{ photo_session.photographer.name }}
+            </p>
+            {% endif %}
+            {% if photo_session.final_delivery_date %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h2v2H7v-2zm-2 0h2v2H5v-2zm4 0h2v2H9v-2zm2 0h2v2h-2v-2zm2 0h2v2h-2v-2zm2 0h2v2h-2v-2z"/></svg>
+                <strong>تاريخ التسليم النهائي:</strong> {{ photo_session.final_delivery_date|date:"Y-m-d"|default:"-" }}
+            </p>
+            {% endif %}
+            {% if photo_session.photo_serial_number %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                <strong>رقم مسلسل الصورة:</strong> {{ photo_session.photo_serial_number|default:"-" }}
+            </p>
+            {% endif %}
+            {% if photo_session.final_gallery_link %}
+            <p>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                <strong>رابط المعرض النهائي:</strong>
+                <span style="color: #007bff; text-decoration: underline;">(راجع الملاحظات لنسخ المسار)</span>
+            </p>
+            {% endif %}
+            <p>
+                <strong>الحالة:</strong>
+                {% if photo_session.status == 'completed' or photo_session.status == 'delivered' %}
+                    <span class="badge badge-green">{{ photo_session.get_status_display }}</span>
+                {% elif photo_session.status == 'in_progress' or photo_session.status == 'processing' or photo_session.status == 'in_shooting' or photo_session.status == 'raw_material_uploaded' or photo_session.status == 'in_editing' or photo_session.status == 'ready_for_review' or photo_session.status == 'ready_for_printing' %}
+                    <span class="badge badge-blue">{{ photo_session.get_status_display }}</span>
+                {% elif photo_session.status == 'scheduled' or photo_session.status == 'pending' %}
+                    <span class="badge badge-orange">{{ photo_session.get_status_display }}</span>
+                {% elif photo_session.status == 'cancelled' %}
+                    <span class="badge badge-red">{{ photo_session.get_status_display }}</span>
+                {% elif photo_session.status == 'partially_paid' %}
+                    <span class="badge badge-purple">{{ photo_session.get_status_display }}</span>
+                {% elif photo_session.status == 'ready_for_delivery' %}
+                    <span class="badge badge-teal">{{ photo_session.get_status_display }}</span>
+                {% else %}
+                    <span class="badge badge-gray">{{ photo_session.get_status_display }}</span>
+                {% endif %}
+            </p>
+            <p>
+                <strong>حالة التعديل:</strong>
+                {% if photo_session.editing_status == 'completed' %}
+                    <span class="badge badge-green">{{ photo_session.get_editing_status_display }}</span>
+                {% elif photo_session.editing_status == 'in_editing' or photo_session.editing_status == 'in_printing' or photo_session.editing_status == 'in_shooting' %}
+                    <span class="badge badge-blue">{{ photo_session.get_editing_status_display }}</span>
+                {% else %}
+                    <span class="badge badge-gray">{{ photo_session.get_editing_status_display }}</span>
+                {% endif %}
+            </p>
+        </div>
+
+        <h2 class="section-title">حالة التسليم</h2>
+        <div class="delivery-status-grid">
+            <p class="delivery-status-item">
+                {% if photo_session.digital_photos_delivered %}
+                    <svg class="icon check-icon" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                {% else %}
+                    <svg class="icon x-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                {% endif %}
+                <span>الصور الرقمية</span>
+            </p>
+            <p class="delivery-status-item">
+                {% if photo_session.printed_photos_delivered %}
+                    <svg class="icon check-icon" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                {% else %}
+                    <svg class="icon x-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                {% endif %}
+                <span>الصور المطبوعة</span>
+            </p>
+            <p class="delivery-status-item">
+                {% if photo_session.album_delivered %}
+                    <svg class="icon check-icon" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                {% else %}
+                    <svg class="icon x-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                {% endif %}
+                <span>الألبوم</span>
+            </p>
+            <p class="delivery-status-item">
+                {% if photo_session.frame_delivered %}
+                    <svg class="icon check-icon" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                {% else %}
+                    <svg class="icon x-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                {% endif %}
+                <span>الإطار</span>
+            </p>
+        </div>
+
+        <h2 class="section-title">الملخص المالي</h2>
+        <div class="financial-summary">
+            <p class="total-amount">
+                <span>المبلغ الكلي:</span>
+                <span>{{ photo_session.total_amount|floatformat:2 }} SAR</span>
+            </p>
+            <p class="paid-amount">
+                <span>المبلغ المدفوع:</span>
+                <span>{{ photo_session.paid_amount|floatformat:2 }} SAR</span>
+            </p>
+            <p class="remaining-amount">
+                <span>المبلغ المتبقي:</span>
+                <span>{{ photo_session.remaining_amount|floatformat:2 }} SAR</span>
+            </p>
+        </div>
+
+        {% if receipts %}
+        <h3 class="section-title receipts-list">سجل الدفعات</h3>
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>رقم الإيصال</th>
+                    <th>المبلغ المدفوع</th>
+                    <th>طريقة الدفع</th>
+                    <th>تاريخ الدفعة</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for receipt in receipts %}
+                <tr>
+                    <td>{{ receipt.receipt_number }}</td>
+                    <td>{{ receipt.paid_amount|floatformat:2 }}</td>
+                    <td>{{ receipt.get_payment_method_display }}</td>
+                    <td>{{ receipt.date_issued|date:"Y-m-d" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" style="text-align: center;">لا توجد دفعات مسجلة لهذه الجلسة.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {% if photo_session.notes or photo_session.agreement_notes or photo_session.final_gallery_link %}
+        <div class="notes-section">
+            <h3 class="section-title" style="margin-bottom: 5px; padding-bottom: 0; border-bottom: none;">ملاحظات</h3>
+            {% if photo_session.notes %}
+                <p><strong>ملاحظات الجلسة:</strong> {{ photo_session.notes }}</p>
+            {% endif %}
+            {% if photo_session.agreement_notes %}
+                <p><strong>ملاحظات الاتفاقية:</strong> {{ photo_session.agreement_notes }}</p>
+            {% endif %}
+            {% if photo_session.final_gallery_link %}
+                <p style="margin-top: 8px; font-weight: bold; color: #007bff;">
+                    * لفتح رابط المعرض النهائي: انسخ المسار التالي والصقه في مستكشف الملفات بجهازك:
+                    <span style="direction: ltr; display: block; text-align: left; font-family: 'Courier New', monospace; background-color: #e9ecef; padding: 4px; border-radius: 3px; word-break: break-all;">
+                        {{ photo_session.final_gallery_link }}
+                    </span>
+                </p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if qr_code_base64 %}
+        <div class="qr-code">
+            <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="رمز QR">
+            <p style="margin-top: 3px; color: #777;">امسح الرمز ضوئيًا لعرض تفاصيل الجلسة</p>
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>صدر عن: {{ photo_session.issued_by.username }}</p>
+            <p>شكرًا لاختياركم {{ company.name }}.</p>
+            <p>يرجى الاحتفاظ بهذا الإيصال كإثبات للدفع والتسليم.</p>
+            <p style="color: red; font-weight: bold; margin-top: 5px;">لا يتم تسليم الصور إلا بهذا الإيصال.</p>
+            <p style="color: red; font-weight: bold;">الاستوديو غير مسؤول عن الصور بعد 30 يوماً من تاريخ التسليم.</p>
+            <p>&copy; {{ "now"|date:"Y" }} {{ company.name }}. جميع الحقوق محفوظة.</p>
+        </div>
+    </div>
+</body>
+</html>
