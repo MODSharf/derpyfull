@@ -19,6 +19,7 @@ router.register(r'users', api_views.UserViewSet)
 router.register(r'photographypackages', api_views.PhotographyPackageViewSet)
 router.register(r'photographers', api_views.PhotographerViewSet)
 router.register(r'photosessions', api_views.PhotoSessionViewSet)
+router.register(r'alerts', api_views.AlertViewSet)
 
 
 urlpatterns = [

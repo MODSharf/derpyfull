@@ -58,13 +58,11 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
   ];
 
   const STATUS_OPTIONS = [
-    { value: 'pending', label: 'قيد الانتظار' },
-    { value: 'in_progress', label: 'قيد التنفيذ' },
-    { value: 'completed', label: 'مكتملة' },
+    { value: 'pending', label: 'مجدولة' },
+    { value: 'in_printing', label: 'قيد الطباعة' },
+    { value: 'in_packaging', label: 'قيد التغليف' },
     { value: 'ready_for_delivery', label: 'جاهزة للتسليم' },
     { value: 'delivered', label: 'تم التسليم' },
-    { value: 'cancelled', label: 'ملغاة' },
-    { value: 'partially_paid', label: 'مدفوعة جزئياً' }, // تأكد من تطابق هذه الحالة مع models.py
   ];
 
   // دالة لجلب العملاء (يمكن إعادة استخدامها)
@@ -381,6 +379,22 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
             step="0.01"
             className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             disabled={isFieldDisabled('paid_amount')}
+          />
+        </div>
+
+        {/* Financial Status (Read-only) */}
+        <div>
+          <label htmlFor="financial_status" className="block text-sm font-medium text-gray-700 mb-1">
+            الحالة المالية
+          </label>
+          <input
+            type="text"
+            id="financial_status"
+            name="financial_status"
+            value={initialData?.financial_status_display || 'غير محددة'}
+            className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm bg-gray-100 cursor-not-allowed focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            readOnly
+            disabled
           />
         </div>
 

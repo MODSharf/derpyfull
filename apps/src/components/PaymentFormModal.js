@@ -1,7 +1,7 @@
 // src/components/PaymentFormModal.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/solid';
-import { getPrintJobById, addPaymentToPrintJob } from '../services/apiService';
+import { getPrintJob, addPaymentToPrintJob } from '../services/apiService';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 
@@ -34,7 +34,7 @@ function PaymentFormModal({ isOpen, onClose, printJobId, onPaymentSuccess }) {
         setLoading(true);
         setError(null);
         try {
-          const data = await getPrintJobById(authToken, printJobId);
+          const data = await getPrintJob(authToken, printJobId);
           setPrintJobDetails(data);
           // Optionally pre-fill paymentAmount with remaining_amount if it's the final payment
           setPaymentAmount(data.remaining_amount ? parseFloat(data.remaining_amount).toFixed(2) : '');

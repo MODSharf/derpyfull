@@ -20,6 +20,7 @@ export const AuthProvider = ({ children, showToast }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(!!authToken); // حالة لتتبع ما إذا كان المستخدم مصادقًا
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [userRoles, setUserRoles] = useState([]); // حالة لتحديد أدوار المستخدم
   const [isManager, setIsManager] = useState(false); // حالة لتحديد ما إذا كان المستخدم مديرًا
 
   // دالة لتعيين توكن المصادقة وتخزينه في localStorage
@@ -38,7 +39,7 @@ export const AuthProvider = ({ children, showToast }) => {
     if (!token) {
       setUser(null);
       setIsAuthenticated(false);
-      setIsManager(false);
+      setUserRoles([]);
       setLoadingAuth(false);
       return;
     }
@@ -47,11 +48,11 @@ export const AuthProvider = ({ children, showToast }) => {
       const userData = await getCurrentUser(token);
       setUser(userData);
       setIsAuthenticated(true);
-      // هذا هو السطر الحاسم: استخدم 'profile_role_display' الذي يأتي من الـ backend
-      // وتأكد من مطابقة القيمة العربية 'مدير'
-      setIsManager(userData.profile_role_display === 'مدير');
+      setUserRoles(userData.roles || []);
+      // Set isManager based on roles
+      setIsManager(userData.roles && userData.roles.includes('manager'));
       console.log('User Data fetched:', userData); // للمساعدة في التصحيح
-      console.log('Is Manager (from profile_role_display):', userData.profile_role_display === 'مدير'); // للمساعدة في التصحيح
+      console.log('User Roles:', userData.roles); // للمساعدة في التصحيح
     } catch (error) {
       console.error('Failed to fetch user data during authentication:', error);
       showToast(`فشل جلب بيانات المستخدم: ${error.message}. الرجاء تسجيل الدخول مرة أخرى.`, 'error');
@@ -59,6 +60,7 @@ export const AuthProvider = ({ children, showToast }) => {
       setAuthToken(null); // استخدم دالة setAuthToken الموحدة هنا
       setUser(null);
       setIsAuthenticated(false);
+      setUserRoles([]);
       setIsManager(false);
     } finally {
       setLoadingAuth(false);
@@ -98,6 +100,7 @@ export const AuthProvider = ({ children, showToast }) => {
       setAuthToken(null); // استخدم دالة setAuthToken الموحدة هنا
       setUser(null);
       setIsAuthenticated(false);
+      setUserRoles([]);
       setIsManager(false);
       showToast('تم تسجيل الخروج بنجاح.', 'info');
     } catch (error) {
@@ -113,10 +116,11 @@ export const AuthProvider = ({ children, showToast }) => {
     isAuthenticated, // توفير حالة المصادقة
     authToken,
     user,
-    isManager,
+    userRoles,
     loadingAuth,
     login,
     logout,
+    isManager, // NEW: توفير حالة المدير
     // الدوال setter لم تعد تمرر مباشرة، استخدم الدوال الموحدة (login, logout, setAuthToken)
   };
 

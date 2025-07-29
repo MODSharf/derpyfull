@@ -10,6 +10,7 @@ router = DefaultRouter()
 router.register(r'clients', api_views.ClientViewSet)
 router.register(r'printjobs', api_views.PrintJobViewSet)
 router.register(r'receipts', api_views.PaymentReceiptViewSet)
+router.register(r'alerts', api_views.AlertViewSet, basename='alert')
 
 urlpatterns = [
     # مسارات الـ API (سيتم إضافة الـ ViewSets هنا)

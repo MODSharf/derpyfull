@@ -27,11 +27,11 @@ from django.db import models
 from django.db.models import Q
 
 # استيراد النماذج
-from .models import Client, PrintJob, PaymentReceipt, Profile, PhotographyPackage, Photographer, PhotoSession
+from .models import Client, PrintJob, PaymentReceipt, Profile, Role, PhotographyPackage, Photographer, PhotoSession, Alert
 # استيراد Serializers
 from .serializers import (
     ClientSerializer, PrintJobSerializer, PaymentReceiptSerializer, UserSerializer,
-    ProfileSerializer, PhotographyPackageSerializer, PhotographerSerializer, PhotoSessionSerializer
+    ProfileSerializer, RoleSerializer, PhotographyPackageSerializer, PhotographerSerializer, PhotoSessionSerializer, AlertSerializer
 )
 
 # ===========================================================================
@@ -69,42 +69,42 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        if self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager'):
+        if self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists()):
             return User.objects.all().select_related('profile').order_by('username')
         return User.objects.filter(id=self.request.user.id).select_related('profile')
 
     def perform_create(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')):
+        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء مستخدمين."})
-        role = self.request.data.get('role', 'employee')
-        if role == 'manager' and not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')):
+        roles_data = self.request.data.get('roles', [])
+        if 'manager' in roles_data and not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء مستخدم بدور مدير."})
         serializer.save()
 
     def perform_update(self, serializer):
-        is_manager = self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')
+        is_manager = self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())
         if self.get_object() != self.request.user and not is_manager:
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل مستخدمين آخرين."})
 
-        if 'role' in self.request.data:
-            new_role = self.request.data['role']
+        if 'roles' in self.request.data:
+            new_roles = self.request.data['roles']
             current_user_profile = self.get_object().profile if hasattr(self.get_object(), 'profile') else None
-            current_user_role = current_user_profile.role if current_user_profile else None
+            current_user_roles = [role.name for role in current_user_profile.roles.all()] if current_user_profile else []
 
             if not is_manager:
-                if new_role != current_user_role:
+                if set(new_roles) != set(current_user_roles):
                     raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتغيير دور المستخدم."})
             else:
-                if self.get_object() == self.request.user and new_role == 'employee':
-                    if User.objects.filter(profile__role='manager').count() <= 1:
+                if self.get_object() == self.request.user and 'manager' not in new_roles:
+                    if User.objects.filter(profile__roles__name='manager').count() <= 1:
                         raise serializers.ValidationError({"detail": "يجب أن يكون هناك مدير واحد على الأقل في النظام."})
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')):
+        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف المستخدمين."})
-        if hasattr(instance, 'profile') and instance.profile.role == 'manager':
-            if User.objects.filter(profile__role='manager').count() <= 1:
+        if hasattr(instance, 'profile') and instance.profile.roles.filter(name='manager').exists():
+            if User.objects.filter(profile__roles__name='manager').count() <= 1:
                 raise serializers.ValidationError({"detail": "لا يمكن حذف المدير الأخير في النظام."})
         instance.delete()
 
@@ -190,6 +190,12 @@ class PrintJobViewSet(viewsets.ModelViewSet):
                 notes='دفعة أولية عند إنشاء طلب الطباعة',
                 issued_by=self.request.user
             )
+        # Create an alert for the new print job
+        Alert.objects.create(
+            message=f"تم إنشاء طلب طباعة جديد للعميل {print_job.client.name} برقم إيصال {print_job.receipt_number}.",
+            alert_type='new_job',
+            user=self.request.user,
+        )
 
     def perform_update(self, serializer):
         serializer.save()
@@ -221,10 +227,8 @@ class PrintJobViewSet(viewsets.ModelViewSet):
             )
 
             print_job.paid_amount += amount
-            if print_job.paid_amount >= print_job.total_amount:
-                print_job.status = 'completed'
-            elif print_job.paid_amount > 0 and print_job.paid_amount < print_job.total_amount:
-                print_job.status = 'partially_paid'
+            if print_job.remaining_amount <= 0:
+                print_job.financial_status = 'paid'
             print_job.save()
 
             # Note: The original code returned a serializer for 'receipt'.
@@ -356,22 +360,22 @@ class PhotographyPackageViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        if self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager'):
+        if self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists()):
             return PhotographyPackage.objects.all().order_by('price')
-        raise Response({"detail": "ليس لديك صلاحية لعرض باقات التصوير."}, status=status.HTTP_403_FORBIDDEN)
+        return PhotographyPackage.objects.none() # Return an empty queryset if not authorized to view all
 
     def perform_create(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')):
+        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء باقات تصوير جديدة."})
         serializer.save()
 
     def perform_update(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')):
+        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل باقات التصوير."})
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')):
+        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف باقات التصوير."})
         instance.delete()
 
@@ -385,22 +389,22 @@ class PhotographerViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        if self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager'):
+        if self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists()):
             return Photographer.objects.all().order_by('name')
-        raise Response({"detail": "ليس لديك صلاحية لعرض المصورين."}, status=status.HTTP_403_FORBIDDEN)
+        return Photographer.objects.none() # Return an empty queryset if not authorized to view all
 
     def perform_create(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')):
+        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء مصورين جدد."})
         serializer.save()
 
     def perform_update(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')):
+        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل المصورين."})
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'manager')):
+        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف المصورين."})
         instance.delete()
 
@@ -427,6 +431,8 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        if not (self.request.user.profile.roles.filter(name='manager').exists() or self.request.user.profile.roles.filter(name='receptionist').exists()):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء جلسات تصوير."})
         photo_session = serializer.save(issued_by=self.request.user)
         initial_paid_amount = photo_session.paid_amount
         if initial_paid_amount > 0:
@@ -439,6 +445,12 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
                 notes='دفعة أولية عند إنشاء جلسة التصوير',
                 issued_by=self.request.user
             )
+        # Create an alert for the new photo session
+        Alert.objects.create(
+            message=f"تم إنشاء جلسة تصوير جديدة للعميل {photo_session.client.name} برقم إيصال {photo_session.receipt_number}.",
+            alert_type='new_job',
+            user=self.request.user,
+        )
 
     def perform_update(self, serializer):
         serializer.save()
@@ -470,10 +482,8 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
             )
 
             photo_session.paid_amount += amount
-            if photo_session.paid_amount >= photo_session.total_amount:
-                photo_session.status = 'completed'
-            elif photo_session.paid_amount > 0 and photo_session.paid_amount < photo_session.total_amount:
-                photo_session.status = 'partially_paid'
+            if photo_session.remaining_amount <= 0:
+                photo_session.financial_status = 'paid'
             photo_session.save()
 
             # Note: The original code returned a serializer for 'receipt'.
@@ -573,8 +583,42 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
 # ===========================================================================
 # ViewSet لملفات التعريف (Profiles) - يستخدم بشكل أساسي لإدارة الأدوار
 # ===========================================================================
+class RoleViewSet(viewsets.ModelViewSet):
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = [IsAdminUser]
+
+
+# ===========================================================================
+# ViewSet لملفات التعريف (Profiles) - يستخدم بشكل أساسي لإدارة الأدوار
+# ===========================================================================
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all().select_related('user').order_by('user__username')
     serializer_class = ProfileSerializer
     permission_classes = [IsAdminUser]
-    filterset_fields = ['role', 'user__username']
+    filterset_fields = ['roles__name', 'user__username']
+
+
+# ===========================================================================
+# ViewSet للتنبيهات (Alerts)
+# ===========================================================================
+class AlertViewSet(viewsets.ModelViewSet):
+    queryset = Alert.objects.all()
+    serializer_class = AlertSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """ 
+        This view should return a list of all the alerts
+        for the currently authenticated user.
+        """
+        alerts = Alert.objects.filter(user=self.request.user).order_by('-created_at')
+        print(f"DEBUG: get_queryset for user {self.request.user.username} returning {alerts.count()} alerts.")
+        return alerts
+
+    @action(detail=True, methods=['post'], url_path='mark-as-read')
+    def mark_as_read(self, request, pk=None):
+        alert = self.get_object()
+        alert.is_read = True
+        alert.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)

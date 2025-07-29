@@ -1,54 +1,64 @@
 # stapi/print/serializers.py
 
+from django.utils import timezone
+import re
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Client, PrintJob, PaymentReceipt, Profile, PhotographyPackage, Photographer, PhotoSession # تم إضافة نماذج التصوير
+from .models import Client, PrintJob, PaymentReceipt, Profile, Role, PhotographyPackage, Photographer, PhotoSession, Alert
+from django.contrib.contenttypes.models import ContentType
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = '__all__'
+
 
 # ===========================================================================
 # 1. User Serializer (لجلب بيانات المستخدم الأساسية وإنشاء/تحديث Profile)
 # ===========================================================================
 class UserSerializer(serializers.ModelSerializer):
-    # يعرض دور المستخدم المقروء بشريًا من Profile
-    profile_role_display = serializers.CharField(source='profile.get_role_display', read_only=True)
-    # حقل لكتابة الدور عند إنشاء/تحديث المستخدم
-    role = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    roles = serializers.SlugRelatedField(
+        many=True,
+        read_only=True,
+        slug_field='name',
+        source='profile.roles'
+    )
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile_role_display', 'role', 'password']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'roles', 'password']
         extra_kwargs = {
             'password': {'write_only': True, 'required': False},
             'email': {'required': False, 'allow_blank': True},
             'first_name': {'required': False, 'allow_blank': True},
             'last_name': {'required': False, 'allow_blank': True},
         }
-        # profile_role_display هو حقل للقراءة فقط يعرض الدور
-        read_only_fields = ['profile_role_display']
+        read_only_fields = ['roles']
 
     def create(self, validated_data):
-        role = validated_data.pop('role', 'employee') # الدور الافتراضي هو 'employee'
+        roles_data = self.context['request'].data.get('roles', [])
         password = validated_data.pop('password', None)
         user = User.objects.create(**validated_data)
         if password:
             user.set_password(password)
             user.save()
-        Profile.objects.create(user=user, role=role)
+        profile = Profile.objects.create(user=user)
+        roles = Role.objects.filter(name__in=roles_data)
+        profile.roles.set(roles)
         return user
 
     def update(self, instance, validated_data):
-        # التعامل مع تحديث الدور
-        role = validated_data.pop('role', None)
-        if role:
-            profile, created = Profile.objects.get_or_create(user=instance)
-            profile.role = role
-            profile.save()
+        roles_data = self.context['request'].data.get('roles')
+        if roles_data is not None:
+            profile = instance.profile
+            roles = Role.objects.filter(name__in=roles_data)
+            profile.roles.set(roles)
 
-        # التعامل مع تحديث كلمة المرور
         password = validated_data.pop('password', None)
         if password:
             instance.set_password(password)
 
-        # تحديث حقول المستخدم الأخرى
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -58,12 +68,12 @@ class UserSerializer(serializers.ModelSerializer):
 # 2. Profile Serializer (لإدارة ملفات تعريف المستخدمين - يستخدم بشكل أساسي داخليًا)
 # ===========================================================================
 class ProfileSerializer(serializers.ModelSerializer):
-    user = serializers.StringRelatedField(read_only=True) # يعرض اسم المستخدم
-    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    user = serializers.StringRelatedField(read_only=True)
+    roles = serializers.StringRelatedField(many=True, read_only=True)
 
     class Meta:
         model = Profile
-        fields = ['id', 'user', 'role', 'role_display']
+        fields = ['id', 'user', 'roles']
         read_only_fields = ['user']
 
 # ===========================================================================
@@ -149,6 +159,7 @@ class PrintJobSerializer(serializers.ModelSerializer):
     print_type_display = serializers.CharField(source='get_print_type_display', read_only=True)
     size_display = serializers.CharField(source='get_size_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    financial_status = serializers.CharField(source='get_financial_status_display', read_only=True)
 
     remaining_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
@@ -156,14 +167,16 @@ class PrintJobSerializer(serializers.ModelSerializer):
 
     issued_by_username = serializers.CharField(source='issued_by.username', read_only=True)
 
+    def get_financial_status_display(self, obj):
+        return obj.get_financial_status_display()
 
     class Meta:
         model = PrintJob
         fields = [
             'id', 'receipt_number', 'client', 'client_id', 'print_type', 'print_type_display',
             'size', 'size_display', 'total_amount', 'paid_amount', 'remaining_amount',
-            'delivery_date', 'status', 'status_display', 'notes', 'issued_by',
-            'issued_by_username', 'created_at', 'updated_at', 'payment_receipts'
+            'delivery_date', 'status', 'status_display', 'notes', 'financial_status', 'issued_by',
+            'issued_by_username', 'created_at', 'updated_at', 'payment_receipts', 'get_financial_status_display'
         ]
         read_only_fields = ['receipt_number', 'created_at', 'updated_at', 'issued_by', 'remaining_amount']
 
@@ -188,10 +201,13 @@ class PhotoSessionSerializer(serializers.ModelSerializer):
 
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
-    editing_status_display = serializers.CharField(source='get_editing_status_display', read_only=True)
+    financial_status = serializers.CharField(source='get_financial_status_display', read_only=True)
 
     remaining_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     issued_by_username = serializers.CharField(source='issued_by.username', read_only=True)
+
+    def get_financial_status_display(self, obj):
+        return obj.get_financial_status_display()
 
     class Meta:
         model = PhotoSession
@@ -206,7 +222,7 @@ class PhotoSessionSerializer(serializers.ModelSerializer):
             'num_printed_photos_delivered',
             'photo_serial_number',
             'final_gallery_link',
-            'editing_status', 'editing_status_display',
+            'financial_status',
             'agreement_notes',
             'digital_photos_delivered',
             'printed_photos_delivered', 'album_delivered', 'frame_delivered',
@@ -223,3 +239,154 @@ class PhotoSessionSerializer(serializers.ModelSerializer):
         if not representation.get('photographer'):
             representation['photographer'] = None
         return representation
+
+# ===========================================================================
+# 9. Notification Serializer
+# ===========================================================================
+class AlertSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    related_object_details = serializers.SerializerMethodField()
+    derived_status_category = serializers.SerializerMethodField()
+    client_name = serializers.SerializerMethodField()
+    next_action_status = serializers.SerializerMethodField()
+    job_type_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Alert
+        fields = [
+            'id', 'message', 'alert_type', 'is_read',
+            'created_at', 'user', 'user_username', 'related_object_details',
+            'derived_status_category', 'client_name', 'next_action_status', 'job_type_display'
+        ]
+        read_only_fields = [
+            'id', 'message', 'alert_type', 'created_at', 'user', 'user_username',
+            'related_object_details', 'derived_status_category', 'client_name', 'next_action_status', 'job_type_display'
+        ]
+
+    def get_related_object_details(self, obj):
+        # Extract receipt number from the message
+        match = re.search(r'برقم إيصال (PHO-[0-9]{14}-[0-9]+|PRN-[0-9]{14}-[0-9]+)\.', obj.message)
+        if match:
+            receipt_number = match.group(1)
+            if receipt_number.startswith('PHO-'):
+                try:
+                    photosession = PhotoSession.objects.get(receipt_number=receipt_number)
+                    return {'type': 'photosession', 'id': photosession.id, 'receipt_number': photosession.receipt_number}
+                except PhotoSession.DoesNotExist:
+                    pass
+            elif receipt_number.startswith('PRN-'):
+                try:
+                    printjob = PrintJob.objects.get(receipt_number=receipt_number)
+                    return {'type': 'printjob', 'id': printjob.id, 'receipt_number': printjob.receipt_number}
+                except PrintJob.DoesNotExist:
+                    pass
+        return None
+
+    def _get_related_object(self, obj):
+        details = self.get_related_object_details(obj)
+        if details:
+            obj_type = details['type']
+            obj_id = details['id']
+            if obj_type == 'photosession':
+                try:
+                    return PhotoSession.objects.get(id=obj_id)
+                except PhotoSession.DoesNotExist:
+                    pass
+            elif obj_type == 'printjob':
+                try:
+                    return PrintJob.objects.get(id=obj_id)
+                except PrintJob.DoesNotExist:
+                    pass
+        return None
+
+    def get_client_name(self, obj):
+        related_obj = self._get_related_object(obj)
+        if related_obj and hasattr(related_obj, 'client') and related_obj.client:
+            return related_obj.client.name
+        return None
+
+    def get_next_action_status(self, obj):
+        related_obj = self._get_related_object(obj)
+        if related_obj:
+            if isinstance(related_obj, PrintJob):
+                if related_obj.status == 'pending':
+                    return "Ready for Printing"
+                elif related_obj.status == 'in_printing':
+                    return "In Printing"
+                elif related_obj.status == 'in_packaging':
+                    return "In Packaging"
+                elif related_obj.status == 'ready_for_delivery':
+                    return "Ready for Delivery"
+                elif related_obj.status == 'delivered':
+                    return "Delivered"
+                elif related_obj.status == 'cancelled':
+                    return "Cancelled"
+                else:
+                    return "Status Unknown"
+            elif isinstance(related_obj, PhotoSession):
+                if related_obj.status == 'scheduled':
+                    return "Ready for Photography"
+                elif related_obj.status == 'in_shooting':
+                    return "In Shooting"
+                elif related_obj.status == 'in_editing':
+                    return "Ready for Editing"
+                elif related_obj.status == 'in_printing':
+                    return "Ready for Printing"
+                elif related_obj.status == 'ready_for_delivery':
+                    return "Ready for Delivery"
+                elif related_obj.status == 'delivered':
+                    return "Delivered"
+                # If status is not one of the above, it might be 'cancelled' or an unexpected state
+                elif related_obj.status == 'cancelled':
+                    return "Cancelled"
+                else:
+                    return "Status Unknown"
+        return "Status Unknown"
+
+    def get_job_type_display(self, obj):
+        related_obj = self._get_related_object(obj)
+        if related_obj:
+            if isinstance(related_obj, PrintJob):
+                return related_obj.get_print_type_display()
+            elif isinstance(related_obj, PhotoSession):
+                return related_obj.get_event_type_display() or related_obj.package.name if related_obj.package else "Photo Session"
+        return "N/A"
+
+    def get_derived_status_category(self, obj):
+        related_object_details = self.get_related_object_details(obj)
+        if related_object_details:
+            obj_type = related_object_details['type']
+            obj_id = related_object_details['id']
+            today = timezone.localdate()
+
+            if obj_type == 'photosession':
+                try:
+                    photosession = PhotoSession.objects.get(id=obj_id)
+                    target_date = photosession.session_date
+                    if target_date == today:
+                        return 'today'
+                    elif target_date > today:
+                        return 'upcoming'
+                    else:
+                        return 'late'
+                except PhotoSession.DoesNotExist:
+                    pass
+            elif obj_type == 'printjob':
+                try:
+                    printjob = PrintJob.objects.get(id=obj_id)
+                    target_date = printjob.delivery_date
+                    if target_date == today:
+                        return 'today'
+                    elif target_date > today:
+                        return 'upcoming'
+                    else:
+                        return 'late'
+                except PrintJob.DoesNotExist:
+                    pass
+        return 'other'
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if 'related_object_details' not in data or data['related_object_details'] is None:
+            data['related_object_details'] = self.get_related_object_details(instance)
+        return data

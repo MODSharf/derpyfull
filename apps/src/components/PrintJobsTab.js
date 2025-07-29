@@ -8,7 +8,7 @@ import ConfirmationModal from './ConfirmationModal'; // مكون التأكيد
 import { 
   getPrintJobs, 
   deletePrintJob, 
-  getPrintJobById, 
+  getPrintJob, 
   downloadPaymentReceiptPdf, // تم تغيير الاسم هنا
   generatePrintInvoicePdf, // دالة توليد الفاتورة النهائية
 } from '../services/apiService';
@@ -119,7 +119,7 @@ function PrintJobsTab({ onViewClientDetails }) {
     }
     setLoading(true);
     try {
-      const jobDetails = await getPrintJobById(authToken, jobId);
+      const jobDetails = await getPrintJob(authToken, jobId);
       setInitialJobFormData(jobDetails);
       setEditingJobId(jobId);
       setShowAddForm(true);

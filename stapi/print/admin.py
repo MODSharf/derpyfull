@@ -4,13 +4,15 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin # استيراد UserAdmin الأصلي
 from django.contrib.auth.models import User
 # استيراد النماذج الجديدة: PhotographyPackage, Photographer, PhotoSession
-from .models import Client, PrintJob, PaymentReceipt, Profile, PhotographyPackage, Photographer, PhotoSession
+from .models import Client, PrintJob, PaymentReceipt, Profile, Role, PhotographyPackage, Photographer, PhotoSession
 
-    # ===========================================================================
-    # تسجيل النماذج في لوحة الإدارة
-    # ===========================================================================
+# ===========================================================================
+# تسجيل النماذج في لوحة الإدارة
+# ===========================================================================
 
-    # تسجيل نموذج العميل
+admin.site.register(Role)
+
+# تسجيل نموذج العميل
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
     list_display = ('name', 'phone', 'email', 'created_at')
@@ -18,7 +20,7 @@ class ClientAdmin(admin.ModelAdmin):
     list_filter = ('created_at',)
     ordering = ('-created_at',)
 
-    # تسجيل نموذج طلب الطباعة
+# تسجيل نموذج طلب الطباعة
 @admin.register(PrintJob)
 class PrintJobAdmin(admin.ModelAdmin):
     list_display = ('receipt_number', 'client', 'print_type', 'size', 'total_amount', 'paid_amount', 'remaining_amount', 'status', 'delivery_date', 'issued_by')
@@ -29,7 +31,7 @@ class PrintJobAdmin(admin.ModelAdmin):
     ordering = ('-created_at',)
     readonly_fields = ('remaining_amount', 'receipt_number', 'issued_by') # جعل هذه الحقول للقراءة فقط في لوحة الإدارة
 
-    # تسجيل نموذج إيصال الدفع
+# تسجيل نموذج إيصال الدفع
 @admin.register(PaymentReceipt)
 class PaymentReceiptAdmin(admin.ModelAdmin):
     # تم إزالة 'booking' من list_display و raw_id_fields
@@ -40,9 +42,9 @@ class PaymentReceiptAdmin(admin.ModelAdmin):
     ordering = ('-date_issued',)
     readonly_fields = ('date_issued',) # تاريخ الإصدار يتم تعيينه تلقائياً
 
-    # ===========================================================================
-    # تسجيل نماذج قسم التصوير الجديدة (جديد)
-    # ===========================================================================
+# ===========================================================================
+# تسجيل نماذج قسم التصوير الجديدة (جديد)
+# ===========================================================================
 
 @admin.register(PhotographyPackage)
 class PhotographyPackageAdmin(admin.ModelAdmin):
@@ -67,48 +69,39 @@ class PhotoSessionAdmin(admin.ModelAdmin):
     ordering = ('-session_date', '-session_time')
     readonly_fields = ('remaining_amount', 'receipt_number', 'issued_by') # جعل هذه الحقول للقراءة فقط
 
-    # ===========================================================================
-    # دمج Profile مع User في لوحة الإدارة
-    # ===========================================================================
+# ===========================================================================
+# دمج Profile مع User في لوحة الإدارة
+# ===========================================================================
 
-    # تعريف Inline لنموذج Profile
-class ProfileInline(admin.StackedInline): # أو admin.TabularInline إذا كنت تفضل تخطيطًا مضغوطًا
+# تعريف Inline لنموذج Profile
+class ProfileInline(admin.StackedInline):
     model = Profile
-    can_delete = False # لا تسمح بحذف ملف التعريف بشكل منفصل عن المستخدم
-    verbose_name_plural = 'الملف الشخصي' # اسم القسم في لوحة الإدارة
+    can_delete = False
+    verbose_name_plural = 'الملف الشخصي'
+    filter_horizontal = ('roles',)
 
-    # إعادة تسجيل نموذج User في لوحة الإدارة لإضافة ProfileInline
+# إعادة تسجيل نموذج User في لوحة الإدارة لإضافة ProfileInline
 class UserAdmin(BaseUserAdmin):
-    inlines = (ProfileInline,) # إضافة الـ inline هنا
-    # يمكنك تخصيص list_display, fieldsets, add_fieldsets هنا إذا أردت
-    # للحفاظ على حقول User الأصلية، يمكنك نسخها من BaseUserAdmin
-        # مثال:
-        # list_display = BaseUserAdmin.list_display + ('is_staff', 'is_active', 'profile_role')
-        # def profile_role(self, obj):
-        #     return obj.profile.get_role_display()
-        # profile_role.short_description = 'الدور'
-        
-        # إذا كنت تريد إضافة حقل الدور إلى قائمة العرض للمستخدمين
+    inlines = (ProfileInline,)
+
+    def get_roles(self, obj):
+        return ", ".join([role.name for role in obj.profile.roles.all()])
+    get_roles.short_description = 'الأدوار'
+
     def get_list_display(self, request):
-            # إضافة 'profile_role' إلى قائمة العرض الافتراضية
-        return BaseUserAdmin.list_display + ('profile_role',)
-
-    def profile_role(self, obj):
-            # التأكد من وجود ملف تعريف قبل محاولة الوصول إلى الدور
-        return obj.profile.get_role_display() if hasattr(obj, 'profile') else 'غير محدد'
-    profile_role.short_description = 'الدور'
+        return BaseUserAdmin.list_display + ('get_roles',)
 
 
-    # إلغاء تسجيل UserAdmin الأصلي وإعادة تسجيله بنسختنا المخصصة
+# إلغاء تسجيل UserAdmin الأصلي وإعادة تسجيله بنسختنا المخصصة
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
 
-    # تسجيل نموذج Booking (إذا كان موجودًا)
-    # @admin.register(Booking)
-    # class BookingAdmin(admin.ModelAdmin):
-    #     list_display = ('client', 'booking_date', 'booking_time', 'service_type', 'total_amount', 'paid_amount', 'status')
-    #     list_filter = ('status', 'booking_date', 'service_type')
-    #     search_fields = ('client__name', 'notes')
-    #     raw_id_fields = ('client',)
-    #     date_hierarchy = 'booking_date'
-    #     ordering = ('-booking_date', '-booking_time')
+# تسجيل نموذج Booking (إذا كان موجودًا)
+# @admin.register(Booking)
+# class BookingAdmin(admin.ModelAdmin):
+#     list_display = ('client', 'booking_date', 'booking_time', 'service_type', 'total_amount', 'paid_amount', 'status')
+#     list_filter = ('status', 'booking_date', 'service_type')
+#     search_fields = ('client__name', 'notes')
+#     raw_id_fields = ('client',)
+#     date_hierarchy = 'booking_date'
+#     ordering = ('-booking_date', '-booking_time')

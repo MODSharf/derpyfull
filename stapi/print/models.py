@@ -6,18 +6,28 @@ from django.utils import timezone
 from decimal import Decimal # Import Decimal for financial calculations
 
 # ===========================================================================
+# نموذج الدور (لتحديد صلاحيات المستخدم)
+# ===========================================================================
+class Role(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name='اسم الدور')
+    description = models.TextField(blank=True, null=True, verbose_name='وصف الدور')
+
+    class Meta:
+        verbose_name = 'دور'
+        verbose_name_plural = 'الأدوار'
+
+    def __str__(self):
+        return self.name
+
+# ===========================================================================
 # نموذج الملف الشخصي للمستخدم (لربط الدور بالمستخدم)
 # ===========================================================================
 class Profile(models.Model):
-    USER_ROLES = (
-        ('manager', 'مدير'),
-        ('employee', 'موظف'),
-    )
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    role = models.CharField(max_length=10, choices=USER_ROLES, default='employee')
+    roles = models.ManyToManyField(Role, related_name='profiles', verbose_name='الأدوار')
 
     def __str__(self):
-        return f"{self.user.username}'s Profile ({self.get_role_display()})"
+        return f"{self.user.username}'s Profile"
 
 # ===========================================================================
 # نموذج العميل
@@ -43,13 +53,15 @@ class Client(models.Model):
 # ===========================================================================
 class PrintJob(models.Model):
     STATUS_CHOICES = (
-        ('pending', 'قيد الانتظار'),
-        ('in_progress', 'قيد التنفيذ'),
-        ('completed', 'مكتملة'),
+        ('pending', 'مجدولة'),
+        ('in_printing', 'قيد الطباعة'),
+        ('in_packaging', 'قيد التغليف'),
         ('ready_for_delivery', 'جاهزة للتسليم'),
         ('delivered', 'تم التسليم'),
-        ('cancelled', 'ملغاة'),
-        ('partially_paid', 'مدفوعة جزئياً'), # حالة جديدة
+    )
+    FINANCIAL_STATUS_CHOICES = (
+        ('incomplete', 'غير مكتملة'),
+        ('completed', 'مكتملة'),
     )
     PRINT_TYPE_CHOICES = (
         ('digital', 'طباعة رقمية'),
@@ -75,6 +87,7 @@ class PrintJob(models.Model):
     delivery_date = models.DateField(verbose_name='تاريخ التسليم المتوقع')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='الحالة')
     notes = models.TextField(blank=True, null=True, verbose_name='ملاحظات')
+    financial_status = models.CharField(max_length=20, choices=FINANCIAL_STATUS_CHOICES, default='incomplete', verbose_name='الحالة المالية')
     issued_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='issued_print_jobs', verbose_name='صدر عن')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='تاريخ آخر تحديث')
@@ -92,15 +105,34 @@ class PrintJob(models.Model):
         return self.total_amount - self.paid_amount
 
     def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        old_status = None
+        if not is_new:
+            old_status = PrintJob.objects.get(pk=self.pk).status
+
+        # Auto-update financial_status
+        if self.paid_amount >= self.total_amount:
+            self.financial_status = 'completed'
+        else:
+            self.financial_status = 'incomplete'
+
         if not self.receipt_number:
-            # توليد رقم إيصال فريد بناءً على التاريخ والوقت ومعرف الكائن
             now = timezone.now()
-            # حفظ مبدئي للحصول على self.id
-            super().save(*args, **kwargs) 
+            super().save(*args, **kwargs)
             self.receipt_number = f"PRN-{now.strftime('%Y%m%d%H%M%S')}-{self.id}"
-            self.save(update_fields=['receipt_number']) # حفظ مرة أخرى لتحديث رقم الإيصال
+            self.save(update_fields=['receipt_number'])
         else:
             super().save(*args, **kwargs)
+
+        # Signal for alert management
+        if not is_new and old_status != 'delivered' and self.status == 'delivered':
+            from django.db.models.signals import post_save
+            from django.dispatch import receiver
+            from .signals import handle_job_delivered
+            post_save.connect(handle_job_delivered, sender=PrintJob)
+            # Disconnect immediately after use to prevent multiple connections
+            post_save.disconnect(handle_job_delivered, sender=PrintJob)
+            handle_job_delivered(sender=PrintJob, instance=self, created=False, **kwargs)
 
 # ===========================================================================
 # نموذج باقة التصوير (جديد) - تم إضافة الحقول هنا
@@ -153,21 +185,16 @@ class Photographer(models.Model):
 class PhotoSession(models.Model):
     STATUS_CHOICES = (
         ('scheduled', 'مجدولة'),
-        ('in_progress', 'قيد التنفيذ'),
-        ('completed', 'مكتملة'),
+        ('in_shooting', 'قيد التصوير'),
+        ('in_editing', 'تحت التعديل'),
+        ('in_printing', 'قيد الطباعة'),
+        ('ready_for_delivery', 'جاهزة للتسليم'),
         ('delivered', 'تم التسليم'),
-        ('cancelled', 'ملغاة'),
-        ('processing', 'قيد المعالجة'), 
-        ('ready_for_delivery', 'جاهزة للتسليم'), 
-        ('partially_paid', 'مدفوعة جزئياً'), 
     )
     # خيارات جديدة لحالة التعديل/المعالجة
-    EDITING_STATUS_CHOICES = (
-        ('not_started', 'لم تبدأ'),
-        ('in_shooting', 'قيد التصوير'), 
-        ('in_editing', 'قيد التعديل'),
-        ('in_printing', 'قيد الطباعة'), 
-        ('completed', 'تم الانتهاء'),
+    FINANCIAL_STATUS_CHOICES = (
+        ('incomplete', 'غير مكتملة'),
+        ('completed', 'مكتملة'),
     )
     # خيارات جديدة لنوع الحدث/التصوير
     EVENT_TYPE_CHOICES = (
@@ -197,7 +224,7 @@ class PhotoSession(models.Model):
     num_printed_photos_delivered = models.IntegerField(default=0, blank=True, null=True, verbose_name='عدد الصور المطبوعة المسلمة')
     photo_serial_number = models.CharField(max_length=100, blank=True, null=True, verbose_name='رقم مسلسل الصورة')
     final_gallery_link = models.URLField(max_length=255, blank=True, null=True, verbose_name='رابط المعرض النهائي')
-    editing_status = models.CharField(max_length=20, choices=EDITING_STATUS_CHOICES, default='not_started', verbose_name='حالة التعديل/المعالجة')
+    financial_status = models.CharField(max_length=20, choices=FINANCIAL_STATUS_CHOICES, default='incomplete', verbose_name='الحالة المالية')
     agreement_notes = models.TextField(blank=True, null=True, verbose_name='ملاحظات الاتفاقية')
     # --- نهاية الحقول الجديدة ---
 
@@ -222,14 +249,28 @@ class PhotoSession(models.Model):
         return self.total_amount - self.paid_amount
 
     def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        old_status = None
+        if not is_new:
+            old_status = PhotoSession.objects.get(pk=self.pk).status
+
         if not self.receipt_number:
             now = timezone.now()
-            # حفظ مبدئي للحصول على self.id قبل توليد receipt_number
-            super().save(*args, **kwargs) 
+            super().save(*args, **kwargs)
             self.receipt_number = f"PHO-{now.strftime('%Y%m%d%H%M%S')}-{self.id}"
-            self.save(update_fields=['receipt_number']) # حفظ مرة أخرى لتحديث رقم الإيصال
+            self.save(update_fields=['receipt_number'])
         else:
             super().save(*args, **kwargs)
+
+        # Signal for alert management
+        if not is_new and old_status != 'delivered' and self.status == 'delivered':
+            from django.db.models.signals import post_save
+            from django.dispatch import receiver
+            from .signals import handle_job_delivered
+            post_save.connect(handle_job_delivered, sender=PhotoSession)
+            # Disconnect immediately after use to prevent multiple connections
+            post_save.disconnect(handle_job_delivered, sender=PhotoSession)
+            handle_job_delivered(sender=PhotoSession, instance=self, created=False, **kwargs)
 
 # ===========================================================================
 # نموذج إيصال الدفع (تعديل: إضافة علاقة لجلسات التصوير)

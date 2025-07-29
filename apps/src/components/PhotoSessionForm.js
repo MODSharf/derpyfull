@@ -51,8 +51,9 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
     num_printed_photos_delivered: 0,
     photo_serial_number: '',
     final_gallery_link: '',
-    editing_status: 'not_started',
+    financial_status: 'incomplete', // Default status
     agreement_notes: '',
+    payment_method: 'cash', // Add payment_method to state
   });
 
   const [clients, setClients] = useState([]);
@@ -127,8 +128,9 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
         num_printed_photos_delivered: initialData.num_printed_photos_delivered || 0,
         photo_serial_number: initialData.photo_serial_number || '',
         final_gallery_link: initialData.final_gallery_link || '',
-        editing_status: initialData.editing_status || 'not_started',
+        financial_status: initialData.financial_status || 'incomplete',
         agreement_notes: initialData.agreement_notes || '',
+        payment_method: initialData.payment_method || 'cash',
       });
     } else {
       // Reset form for new entry if initialData is null
@@ -154,8 +156,9 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
         num_printed_photos_delivered: 0,
         photo_serial_number: '',
         final_gallery_link: '',
-        editing_status: 'not_started',
+        financial_status: 'incomplete',
         agreement_notes: '',
+        payment_method: 'cash',
       });
     }
     setErrors({}); // Clear errors on initial data change
@@ -231,6 +234,12 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
       return;
     }
 
+    if (!authToken) {
+      showToast('خطأ: لا يوجد توكن مصادقة. يرجى تسجيل الدخول.', 'error');
+      setIsSubmitting(false); // Ensure button is re-enabled
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       let response;
@@ -255,8 +264,9 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
         num_printed_photos_delivered: formData.num_printed_photos_delivered || 0,
         photo_serial_number: formData.photo_serial_number || null,
         final_gallery_link: formData.final_gallery_link || null,
-        editing_status: formData.editing_status || 'not_started',
+        financial_status: formData.financial_status || 'incomplete',
         agreement_notes: formData.agreement_notes || null,
+        payment_method: formData.payment_method || 'cash',
       };
 
       // Remove individual time fields as they are combined into session_time
@@ -346,24 +356,20 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
   const PHOTO_SESSION_STATUS_OPTIONS = [
     { value: 'scheduled', label: 'مجدولة' },
     { value: 'in_shooting', label: 'قيد التصوير' },
-    { value: 'raw_material_uploaded', label: 'تم رفع المواد الخام' },
-    { value: 'in_editing', label: 'قيد التعديل' },
-    { value: 'ready_for_review', label: 'جاهزة للمراجعة' },
-    { value: 'ready_for_printing', label: 'جاهزة للطباعة' },
+    { value: 'in_editing', label: 'تحت التعديل' },
+    { value: 'in_printing', label: 'قيد الطباعة' },
     { value: 'ready_for_delivery', label: 'جاهزة للتسليم' },
     { value: 'delivered', label: 'تم التسليم' },
-    { value: 'partially_paid', label: 'مدفوعة جزئياً' },
-    { value: 'completed', label: 'مكتملة (مدفوعة بالكامل)' },
-    { value: 'cancelled', label: 'ملغاة' },
   ];
 
-  const EDITING_STATUS_OPTIONS = [
-    { value: 'not_started', label: 'لم تبدأ' },
-    { value: 'in_shooting', label: 'قيد التصوير' },
-    { value: 'in_editing', label: 'قيد التعديل' },
-    { value: 'in_printing', label: 'قيد الطباعة' },
-    { value: 'completed', label: 'تم الانتهاء' },
+  const PAYMENT_METHOD_OPTIONS = [
+    { value: 'cash', label: 'نقداً' },
+    { value: 'bank_transfer', label: 'تحويل بنكي' },
+    { value: 'mobile_money', label: 'دفع إلكتروني' },
+    { value: 'card', label: 'بطاقة ائتمان/خصم' },
+    { value: 'other', label: 'أخرى' },
   ];
+
 
 
   return (
@@ -566,6 +572,24 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
         {errors.paid_amount && <p className="mt-1 text-sm text-red-600">{errors.paid_amount}</p>}
       </div>
 
+      {/* Payment Method */}
+      <div>
+        <label htmlFor="payment_method" className="block text-sm font-medium text-gray-700 mb-1">
+          طريقة الدفع
+        </label>
+        <select
+          id="payment_method"
+          name="payment_method"
+          value={formData.payment_method}
+          onChange={handleChange}
+          className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+        >
+          {PAYMENT_METHOD_OPTIONS.map(option => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Status - UPDATED OPTIONS */}
       <div>
         <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
@@ -718,23 +742,7 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
           </p>
         </div>
 
-        {/* Editing Status - UPDATED OPTIONS */}
-        <div>
-          <label htmlFor="editing_status" className="block text-sm font-medium text-gray-700 mb-1">
-            حالة التعديل/المعالجة
-          </label>
-          <select
-            id="editing_status"
-            name="editing_status"
-            value={formData.editing_status}
-            onChange={handleChange}
-            className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          >
-            {EDITING_STATUS_OPTIONS.map(option => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </div>
+        
 
         {/* Agreement Notes */}
         <div>

@@ -41,7 +41,7 @@ import {
  * - onViewClientDetails: Function to open the client details modal, passed from AppContent.
  */
 function PhotographyTab({ onViewClientDetails }) {
-  const { authToken, isManager } = useAuth();
+  const { authToken, userRoles } = useAuth();
   const { showToast } = useToast();
 
   const [photoSessions, setPhotoSessions] = useState([]);
@@ -63,6 +63,18 @@ function PhotographyTab({ onViewClientDetails }) {
   const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
   const [sessionToDeleteId, setSessionToDeleteId] = useState(null);
 
+  const hasRole = (role) => userRoles.includes(role);
+
+  const getFinancialStatusDisplay = (status) => {
+    const statusMap = {
+      paid: 'مدفوع',
+      unpaid: 'غير مدفوع',
+      partially_paid: 'مدفوع جزئياً',
+      overpaid: 'مدفوعเกิน'
+    };
+    return statusMap[status] || status;
+  };
+
   // Fetch photo sessions
   const fetchPhotoSessions = useCallback(async () => {
     if (!authToken) {
@@ -74,7 +86,8 @@ function PhotographyTab({ onViewClientDetails }) {
     setError(null);
     try {
       const data = await getPhotoSessions(authToken, searchTerm);
-      setPhotoSessions(data);
+      const sessionsWithStatus = data.map(session => ({...session, financial_status: getFinancialStatusDisplay(session.financial_status)}))
+      setPhotoSessions(sessionsWithStatus);
     } catch (err) {
       console.error('Error fetching photo sessions:', err);
       setError(`فشل جلب جلسات التصوير: ${err.message}`);
@@ -203,30 +216,20 @@ function PhotographyTab({ onViewClientDetails }) {
   }, [authToken, showToast]);
 
 
-  // UPDATED: getStatusColorClass to reflect new statuses
   const getStatusColorClass = useCallback((status) => {
     switch (status) {
-      case 'completed':
       case 'delivered':
         return 'text-green-600';
-      case 'in_progress':
-      case 'processing':
-      case 'in_shooting': // New status
-      case 'raw_material_uploaded': // New status
-      case 'in_editing': // Existing, but now more specific
-      case 'ready_for_review': // New status
-      case 'ready_for_printing': // New status
+      case 'in_shooting':
+      case 'in_editing':
+      case 'in_printing':
         return 'text-blue-600';
       case 'scheduled':
         return 'text-orange-500';
-      case 'cancelled':
-        return 'text-red-600';
-      case 'partially_paid':
-        return 'text-purple-600';
       case 'ready_for_delivery':
         return 'text-teal-600';
-      case 'not_started': // For editing status
-        return 'text-gray-500';
+      case 'cancelled':
+        return 'text-red-600';
       default:
         return 'text-gray-700';
     }
@@ -296,7 +299,7 @@ function PhotographyTab({ onViewClientDetails }) {
             onSessionSaved={handleSessionSaved}
             sessionId={editingSessionId}
             initialData={initialSessionData}
-            isManager={isManager} // Pass isManager prop here */}
+            isManager={hasRole('manager')} // Pass isManager prop here */}
           />
         </div>
       )}
@@ -357,13 +360,8 @@ function PhotographyTab({ onViewClientDetails }) {
                     </p>
                     <p className="text-gray-700 mb-1">
                       <span className="font-semibold">المبلغ الكلي:</span> {parseFloat(session.total_amount).toFixed(2)}
-                    </p>
-                    <p className="text-gray-700 mb-1">
-                      <span className="font-semibold">المبلغ المدفوع:</span> {parseFloat(session.paid_amount).toFixed(2)}
-                    </p>
-                    <p className="text-gray-700 mb-2">
-                      <span className="font-semibold">المبلغ المتبقي:</span>{' '}
-                      <span className="font-bold text-red-600">{parseFloat(session.remaining_amount).toFixed(2)}</span>
+                      <span className="ml-4 font-semibold">المدفوع:</span> {parseFloat(session.paid_amount).toFixed(2)}
+                      <span className="ml-4 font-semibold text-red-600">المتبقي:</span> {parseFloat(session.remaining_amount).toFixed(2)}
                     </p>
                     <p className={`text-lg font-semibold ${getStatusColorClass(session.status)}`}>
                       الحالة: {session.status_display}
@@ -402,9 +400,9 @@ function PhotographyTab({ onViewClientDetails }) {
                         </a>
                       </p>
                     )}
-                    {session.editing_status_display && (
+                    {session.financial_status && (
                       <p className="text-gray-700 text-sm mb-1">
-                        <span className="font-semibold">حالة التعديل:</span> {session.editing_status_display}
+                        <span className="font-semibold">الحالة المالية:</span> {session.financial_status}
                       </p>
                     )}
                     {session.agreement_notes && (
@@ -421,7 +419,7 @@ function PhotographyTab({ onViewClientDetails }) {
                   </div>
                   <div className="flex justify-end gap-2 mt-4 border-t pt-4 border-gray-200">
                     {/* Actions for Photo Session */}
-                    {isManager && parseFloat(session.remaining_amount) > 0 && (
+                    {(hasRole('manager') || hasRole('accountant')) && parseFloat(session.remaining_amount) > 0 && (
                       <button
                         onClick={() => handleAddPayment(session)}
                         className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition"
@@ -446,7 +444,7 @@ function PhotographyTab({ onViewClientDetails }) {
                       <BookOpenIcon className="h-5 w-5" />
                     </button>
                     {/* Existing button for Final Invoice/Receipt (Blue) */}
-                    {isManager && parseFloat(session.remaining_amount) === 0 && (
+                    {hasRole('manager') && parseFloat(session.remaining_amount) === 0 && (
                       <button
                         onClick={() => handleGenerateInvoice(session.id)}
                         className="p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition"
@@ -462,7 +460,7 @@ function PhotographyTab({ onViewClientDetails }) {
                     >
                       <PencilIcon className="h-5 w-5" />
                     </button>
-                    {isManager && (
+                    {hasRole('manager') && (
                       <button
                         onClick={() => confirmDeletePhotoSession(session.id)}
                         className="p-2 text-red-600 hover:text-red-900 transition"
@@ -499,19 +497,13 @@ function PhotographyTab({ onViewClientDetails }) {
                       نوع الحدث
                     </th>
                     <th className="py-3 px-4 text-right text-sm font-semibold text-gray-600 uppercase tracking-wider">
-                      المبلغ الكلي
-                    </th>
-                    <th className="py-3 px-4 text-right text-sm font-semibold text-gray-600 uppercase tracking-wider">
-                      المدفوع
-                    </th>
-                    <th className="py-3 px-4 text-right text-sm font-semibold text-gray-600 uppercase tracking-wider">
-                      المتبقي
+                      المبلغ (كلي/مدفوع/متبقي)
                     </th>
                     <th className="py-3 px-4 text-right text-sm font-semibold text-gray-600 uppercase tracking-wider">
                       الحالة
                     </th>
                     <th className="py-3 px-4 text-right text-sm font-semibold text-gray-600 uppercase tracking-wider">
-                      حالة التعديل
+                      الحالة المالية
                     </th>
                     <th className="py-3 px-4 text-right text-sm font-semibold text-gray-600 uppercase tracking-wider">
                       تاريخ التسليم النهائي
@@ -552,13 +544,7 @@ function PhotographyTab({ onViewClientDetails }) {
                       </td>
                       {/* --- END NEW FIELDS in Table View --- */}
                       <td className="py-3 px-4 whitespace-nowrap text-gray-700">
-                        {parseFloat(session.total_amount).toFixed(2)}
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap text-gray-700">
-                        {parseFloat(session.paid_amount).toFixed(2)}
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap text-red-600 font-bold">
-                        {parseFloat(session.remaining_amount).toFixed(2)}
+                        {parseFloat(session.total_amount).toFixed(2)} / {parseFloat(session.paid_amount).toFixed(2)} / <span className="text-red-600 font-bold">{parseFloat(session.remaining_amount).toFixed(2)}</span>
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span className={`font-semibold ${getStatusColorClass(session.status)}`}>
@@ -567,9 +553,7 @@ function PhotographyTab({ onViewClientDetails }) {
                       </td>
                       {/* --- Display NEW FIELDS in Table View (continued) --- */}
                       <td className="py-3 px-4 whitespace-nowrap text-gray-700">
-                        <span className={`font-semibold ${getStatusColorClass(session.editing_status)}`}>
-                          {session.editing_status_display || '-'}
-                        </span>
+                        {session.financial_status || '-'}
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap text-gray-700">
                         {formatDate(session.final_delivery_date) || '-'}
@@ -577,7 +561,7 @@ function PhotographyTab({ onViewClientDetails }) {
                       {/* --- END NEW FIELDS in Table View (continued) --- */}
                       <td className="py-3 px-4 whitespace-nowrap text-left">
                         <div className="flex items-center gap-2">
-                          {isManager && parseFloat(session.remaining_amount) > 0 && (
+                          {(hasRole('manager') || hasRole('accountant')) && parseFloat(session.remaining_amount) > 0 && (
                             <button
                               onClick={() => handleAddPayment(session)}
                               className="text-blue-600 hover:text-blue-900"
@@ -602,7 +586,7 @@ function PhotographyTab({ onViewClientDetails }) {
                             <BookOpenIcon className="h-5 w-5" />
                           </button>
                           {/* Existing button for Final Invoice/Receipt (Blue) */}
-                          {isManager && parseFloat(session.remaining_amount) === 0 && (
+                          {hasRole('manager') && parseFloat(session.remaining_amount) === 0 && (
                             <button
                               onClick={() => handleGenerateInvoice(session.id)}
                               className="text-purple-600 hover:text-purple-900"
@@ -618,7 +602,7 @@ function PhotographyTab({ onViewClientDetails }) {
                           >
                             <PencilIcon className="h-5 w-5" />
                           </button>
-                          {isManager && (
+                          {hasRole('manager') && (
                             <button
                               onClick={() => confirmDeletePhotoSession(session.id)}
                               className="text-red-600 hover:text-red-900"

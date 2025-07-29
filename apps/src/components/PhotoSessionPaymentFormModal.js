@@ -64,6 +64,12 @@ function PhotoSessionPaymentFormModal({ isOpen, onClose, photoSessionId, onPayme
     setError(null);
     setIsSubmitting(true);
 
+    if (!authToken) {
+      showToast('خطأ: لا يوجد توكن مصادقة. يرجى تسجيل الدخول.', 'error');
+      setIsSubmitting(false);
+      return;
+    }
+
     // Ensure paymentAmount is a valid number
     const parsedPaymentAmount = parseFloat(paymentAmount);
     if (isNaN(parsedPaymentAmount) || parsedPaymentAmount <= 0) {

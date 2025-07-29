@@ -344,7 +344,7 @@
       return data.results || [];
     };
 
-    export const getPrintJobById = async (authToken, id) => {
+    export const getPrintJob = async (authToken, id) => {
       const response = await fetch(`${API_BASE_URL}/printjobs/${id}/`, {
         headers: {
           'Authorization': `Token ${authToken}`,
@@ -355,6 +355,50 @@
         throw new Error(errorData.detail || 'فشل جلب تفاصيل طلب الطباعة');
       }
       return await response.json();
+    };
+
+    export const getPhotoSession = async (authToken, id) => {
+      const response = await fetch(`${API_BASE_URL}/photosessions/${id}/`, {
+        headers: {
+          'Authorization': `Token ${authToken}`,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'فشل جلب تفاصيل جلسة التصوير');
+      }
+      return await response.json();
+    };
+
+    // ===========================================================================
+    // وظائف التنبيهات (Alerts/Notifications)
+    // ===========================================================================
+
+    export const getAlerts = async (authToken) => {
+      const response = await fetch(`${API_BASE_URL}/alerts/`, {
+        headers: {
+          'Authorization': `Token ${authToken}`,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'فشل جلب التنبيهات');
+      }
+      return await response.json();
+    };
+
+    export const markAlertAsRead = async (authToken, id) => {
+      const response = await fetch(`${API_BASE_URL}/alerts/${id}/mark-as-read/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${authToken}`,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'فشل تحديث حالة التنبيه');
+      }
+      return true;
     };
 
     export const createPrintJob = async (authToken, printJobData) => {
