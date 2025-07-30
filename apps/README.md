@@ -1,70 +1,127 @@
-# Getting Started with Create React App
+# Frontend Application (React)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## English
 
-## Available Scripts
+### Overview
+This directory contains the React-based frontend application for the Studio Management System. It provides the user interface for interacting with the backend API, allowing users to manage clients, print jobs, photo sessions, payments, and view reports.
 
-In the project directory, you can run:
+### Key Features
+*   User-friendly interface for all system functionalities.
+*   Dynamic data display and real-time updates.
+*   Role-based access control for UI elements (e.g., Reports, Management sections).
+*   Toast notifications for user feedback.
 
-### `npm start`
+### Technologies Used
+*   **Framework:** React.js
+*   **Styling:** Tailwind CSS
+*   **Charting:** Recharts
+*   **State Management:** React Context API (for Auth and Toast)
+*   **API Communication:** Fetch API
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### Setup and Installation
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+To get the frontend application running, follow these steps:
 
-### `npm test`
+1.  **Navigate to the `apps` directory:**
+    ```bash
+    cd apps
+    ```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
 
-### `npm run build`
+3.  **Configure API Base URL:**
+    Create a `.env` file in the `apps/` directory (if it doesn't exist) and add your backend API URL. Replace `http://localhost:8000` with the actual address of your Django backend.
+    ```
+    REACT_APP_API_BASE_URL=http://localhost:8000/api
+    ```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Running the Application
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+After installation and configuration, you can start the development server:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+npm start
+```
 
-### `npm run eject`
+The application will typically open in your browser at `http://localhost:3000`.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Project Structure
+*   `public/`: Static assets like `index.html`, `favicon.ico`.
+*   `src/`: Contains the main React source code.
+    *   `components/`: Reusable UI components (e.g., `ClientList.js`, `Reports.js`, `Login.js`).
+    *   `contexts/`: React Contexts for global state management (e.g., `AuthContext.js`, `ToastContext.js`).
+    *   `services/`: API service calls (e.g., `apiService.js`).
+    *   `App.js`: Main application component and routing.
+    *   `index.js`: Entry point of the React application.
+    *   `index.css`, `App.css`: Global and app-specific styles.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Contribution
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+When contributing to the frontend, please adhere to the existing coding style and component structure. Ensure all new features are tested and do not introduce regressions.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+---
 
-## Learn More
+## العربية
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### نظرة عامة
+يحتوي هذا الدليل على تطبيق الواجهة الأمامية المبني باستخدام React لنظام إدارة الاستوديو. يوفر واجهة المستخدم للتفاعل مع واجهة برمجة التطبيقات (API) الخلفية، مما يسمح للمستخدمين بإدارة العملاء، طلبات الطباعة، جلسات التصوير، المدفوعات، وعرض التقارير.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### الميزات الرئيسية
+*   واجهة سهلة الاستخدام لجميع وظائف النظام.
+*   عرض ديناميكي للبيانات وتحديثات في الوقت الفعلي.
+*   التحكم في الوصول المستند إلى الأدوار لعناصر واجهة المستخدم (مثل أقسام التقارير والإدارة).
+*   إشعارات Toast لتقديم ملاحظات للمستخدم.
 
-### Code Splitting
+### التقنيات المستخدمة
+*   **الإطار:** React.js
+*   **التصميم:** Tailwind CSS
+*   **الرسوم البيانية:** Recharts
+*   **إدارة الحالة:** React Context API (للمصادقة والإشعارات)
+*   **التواصل مع API:** Fetch API
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### الإعداد والتثبيت
 
-### Analyzing the Bundle Size
+لتشغيل تطبيق الواجهة الأمامية، اتبع هذه الخطوات:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+1.  **انتقل إلى دليل `apps`:**
+    ```bash
+    cd apps
+    ```
 
-### Making a Progressive Web App
+2.  **تثبيت التبعيات:**
+    ```bash
+    npm install
+    ```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+3.  **تكوين عنوان URL الأساسي لـ API:**
+    أنشئ ملف `.env` في دليل `apps/` (إذا لم يكن موجودًا) وأضف عنوان URL الخاص بواجهة برمجة التطبيقات الخلفية. استبدل `http://localhost:8000` بالعنوان الفعلي لخادم Django الخلفي الخاص بك.
+    ```
+    REACT_APP_API_BASE_URL=http://localhost:8000/api
+    ```
 
-### Advanced Configuration
+### تشغيل التطبيق
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+بعد التثبيت والتكوين، يمكنك بدء خادم التطوير:
 
-### Deployment
+```bash
+npm start
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+سيتم فتح التطبيق عادةً في متصفح الويب الخاص بك على `http://localhost:3000`.
 
-### `npm run build` fails to minify
+### هيكل المشروع
+*   `public/`: الأصول الثابتة مثل `index.html`، `favicon.ico`.
+*   `src/`: يحتوي على الكود المصدري الرئيسي لـ React.
+    *   `components/`: مكونات واجهة المستخدم القابلة لإعادة الاستخدام (مثل `ClientList.js`، `Reports.js`، `Login.js`).
+    *   `contexts/`: سياقات React لإدارة الحالة العامة (مثل `AuthContext.js`، `ToastContext.js`).
+    *   `services/`: استدعاءات خدمة API (مثل `apiService.js`).
+    *   `App.js`: المكون الرئيسي للتطبيق والتوجيه.
+    *   `index.js`: نقطة دخول تطبيق React.
+    *   `index.css`، `App.css`: الأنماط العامة والخاصة بالتطبيق.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### المساهمة
+
+عند المساهمة في الواجهة الأمامية، يرجى الالتزام بأسلوب الترميز وهيكل المكونات الحالي. تأكد من اختبار جميع الميزات الجديدة وعدم إدخال أي تراجعات.
