@@ -183,11 +183,21 @@ function UserManagement({ showToast }) {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                      ${user.profile_role_display === 'مدير' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}
-                    >
-                      {user.profile_role_display}
-                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {user.roles && user.roles.length > 0 ? (
+                        user.roles.map(role => (
+                          <span key={role} className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                            ${role === 'manager' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}
+                          >
+                            {role}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                          لا يوجد دور
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     <div className="flex items-center">
@@ -244,7 +254,6 @@ function UserManagement({ showToast }) {
               onCancel={handleCloseUserFormModal}
               userId={editingUserId}
               initialData={initialUserData}
-              currentUserRole={currentUser.role} // Pass current user's role for validation
             />
           </div>
         </div>

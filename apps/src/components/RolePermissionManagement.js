@@ -112,7 +112,7 @@ function RolePermissionManagement() {
           id="role-select"
           onChange={(e) => handleRoleSelect(e.target.value)}
           className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          defaultValue=""
+          value={selectedRole ? selectedRole.id : ''} // Use value for controlled component
         >
           <option value="" disabled>-- Choose a Role --</option>
           {roles.map(role => (

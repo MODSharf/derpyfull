@@ -1,4 +1,4 @@
-    // src/services/apiService.js
+// src/services/apiService.js
 
     // عنوان الـ API الأساسي الخاص بك (تأكد من أنه يشير إلى خادم Django الخاص بك)
     export const API_BASE_URL = 'http://127.0.0.1:8000/api';
@@ -258,10 +258,18 @@
         },
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'فشل جلب طلبات الطباعة للعميل');
+        let errorText = 'خطأ من الخادم.';
+        try {
+          const errorJson = await response.json();
+          errorText = errorJson.detail || JSON.stringify(errorJson);
+        } catch (e) {
+          errorText = await response.text();
+        }
+        console.error('API Error Response (Get Print Job Receipts):', errorText);
+        throw new Error(`فشل جلب طلبات الطباعة للعميل: ${errorText}`);
       }
-      return await response.json();
+      const data = await response.json();
+      return data; // هذا endpoint يعيد قائمة مباشرة
     };
 
     /**
@@ -572,7 +580,7 @@
 
     export const getPaymentReceipts = async (authToken, searchTerm = '') => {
       const query = searchTerm ? `?search=${encodeURIComponent(searchTerm)}` : '';
-      const response = await fetch(`${API_BASE_URL}/paymentreceipts/${query}`, {
+      const response = await fetch(`${API_BASE_URL}/receipts/${query}`, {
         headers: {
           'Authorization': `Token ${authToken}`,
         },
@@ -586,7 +594,7 @@
     };
 
     export const getPaymentReceiptById = async (authToken, id) => {
-      const response = await fetch(`${API_BASE_URL}/paymentreceipts/${id}/`, {
+      const response = await fetch(`${API_BASE_URL}/receipts/${id}/`, {
         headers: {
           'Authorization': `Token ${authToken}`,
         },
@@ -599,7 +607,7 @@
     };
 
     export const createPaymentReceipt = async (authToken, receiptData) => {
-      const response = await fetch(`${API_BASE_URL}/paymentreceipts/`, {
+      const response = await fetch(`${API_BASE_URL}/receipts/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -615,7 +623,7 @@
     };
 
     export const updatePaymentReceipt = async (authToken, id, receiptData) => {
-      const response = await fetch(`${API_BASE_URL}/paymentreceipts/${id}/`, {
+      const response = await fetch(`${API_BASE_URL}/receipts/${id}/`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -631,7 +639,7 @@
     };
 
     export const deletePaymentReceipt = async (authToken, id) => {
-      const response = await fetch(`${API_BASE_URL}/paymentreceipts/${id}/`, {
+      const response = await fetch(`${API_BASE_URL}/receipts/${id}/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Token ${authToken}`,
@@ -1140,4 +1148,71 @@
       window.URL.revokeObjectURL(url);
       return true;
     };
-    
+
+    // ===========================================================================
+    // وظائف إدارة الأدوار والصلاحيات (Role & Permission Management Functions) - NEW
+    // ===========================================================================
+
+    /**
+     * جلب جميع الأدوار.
+     * يتطلب صلاحيات المدير.
+     * @param {string} authToken - توكن المصادقة.
+     * @returns {Promise<Array>} - مصفوفة من كائنات الأدوار.
+     */
+    export const getRoles = async (authToken) => {
+      const response = await fetch(`${API_BASE_URL}/roles/`, {
+        headers: {
+          'Authorization': `Token ${authToken}`,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'فشل جلب الأدوار');
+      }
+      const data = await response.json();
+      return data.results || data;
+    };
+
+    /**
+     * جلب جميع الصلاحيات المتاحة في النظام.
+     * يتطلب صلاحيات المدير.
+     * @param {string} authToken - توكن المصادقة.
+     * @returns {Promise<Array>} - مصفوفة من كائنات الصلاحيات.
+     */
+    export const getPermissions = async (authToken) => {
+      const response = await fetch(`${API_BASE_URL}/permissions/`, {
+        headers: {
+          'Authorization': `Token ${authToken}`,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'فشل جلب الصلاحيات');
+      }
+      const data = await response.json();
+      return data.results || data;
+    };
+
+    /**
+     * تحديث الصلاحيات لدور محدد.
+     * يتطلب صلاحيات المدير.
+     * @param {string} authToken - توكن المصادقة.
+     * @param {number} roleId - معرف الدور.
+     * @param {Array<string>} permissionCodenames - مصفوفة من codenames الصلاحيات (مثال: ['app_label.codename']).
+     * @returns {Promise<Object>} - كائن الدور المحدث.
+     */
+    export const updateRolePermissions = async (authToken, roleId, permissionCodenames) => {
+      const response = await fetch(`${API_BASE_URL}/roles/${roleId}/permissions/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${authToken}`,
+        },
+        body: JSON.stringify({ permissions: permissionCodenames }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || JSON.stringify(errorData));
+      }
+      return await response.json();
+    };

@@ -36,17 +36,26 @@ class UserSerializer(serializers.ModelSerializer):
         slug_field='name',
         source='profile.roles'
     )
+    user_permissions = serializers.SerializerMethodField() # NEW: Field for user permissions
+    is_staff = serializers.BooleanField(read_only=True) # NEW: Expose is_staff
+    is_superuser = serializers.BooleanField(read_only=True) # NEW: Expose is_superuser
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'roles', 'password']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'roles', 'password', 'is_staff', 'is_superuser', 'user_permissions']
         extra_kwargs = {
             'password': {'write_only': True, 'required': False},
             'email': {'required': False, 'allow_blank': True},
             'first_name': {'required': False, 'allow_blank': True},
             'last_name': {'required': False, 'allow_blank': True},
         }
-        read_only_fields = ['roles']
+        read_only_fields = ['roles', 'is_staff', 'is_superuser', 'user_permissions']
+
+    def get_user_permissions(self, obj):
+        # Get all permissions for the user, including those from groups/roles
+        if obj.is_anonymous:
+            return []
+        return list(obj.get_all_permissions())
 
     def create(self, validated_data):
         roles_data = self.context['request'].data.get('roles', [])
