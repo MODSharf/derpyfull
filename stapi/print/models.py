@@ -26,6 +26,16 @@ class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     roles = models.ManyToManyField(Role, related_name='profiles', verbose_name='الأدوار')
 
+    class Meta:
+        verbose_name = 'ملف شخصي'
+        verbose_name_plural = 'ملفات شخصية'
+        permissions = [
+            ("view_user_list", "Can view list of all users"),
+            ("add_user", "Can add new users"),
+            ("change_user_roles", "Can change user roles"),
+            ("delete_user", "Can delete users"),
+        ]
+
     def __str__(self):
         return f"{self.user.username}'s Profile"
 
@@ -223,7 +233,7 @@ class PhotoSession(models.Model):
     num_digital_photos_delivered = models.IntegerField(default=0, blank=True, null=True, verbose_name='عدد الصور الرقمية المسلمة')
     num_printed_photos_delivered = models.IntegerField(default=0, blank=True, null=True, verbose_name='عدد الصور المطبوعة المسلمة')
     photo_serial_number = models.CharField(max_length=100, blank=True, null=True, verbose_name='رقم مسلسل الصورة')
-    final_gallery_link = models.URLField(max_length=255, blank=True, null=True, verbose_name='رابط المعرض النهائي')
+    final_gallery_link = models.CharField(max_length=255, blank=True, null=True, verbose_name='رابط المعرض النهائي')
     financial_status = models.CharField(max_length=20, choices=FINANCIAL_STATUS_CHOICES, default='incomplete', verbose_name='الحالة المالية')
     agreement_notes = models.TextField(blank=True, null=True, verbose_name='ملاحظات الاتفاقية')
     # --- نهاية الحقول الجديدة ---

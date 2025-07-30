@@ -3,9 +3,21 @@
 from django.utils import timezone
 import re
 from rest_framework import serializers
-from django.contrib.auth.models import User
-from .models import Client, PrintJob, PaymentReceipt, Profile, Role, PhotographyPackage, Photographer, PhotoSession, Alert
+from django.contrib.auth.models import User, Permission # Import Permission model
 from django.contrib.contenttypes.models import ContentType
+from .models import Client, PrintJob, PaymentReceipt, Profile, Role, PhotographyPackage, Photographer, PhotoSession, Alert
+
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = ('id', 'name', 'codename', 'content_type')
+
+
+class ContentTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContentType
+        fields = ('id', 'app_label', 'model')
 
 
 class RoleSerializer(serializers.ModelSerializer):

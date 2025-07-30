@@ -22,7 +22,7 @@ from rest_framework.views import APIView
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Permission # Import Permission
 from django.db import models
 from django.db.models import Q
 
@@ -31,8 +31,18 @@ from .models import Client, PrintJob, PaymentReceipt, Profile, Role, Photography
 # استيراد Serializers
 from .serializers import (
     ClientSerializer, PrintJobSerializer, PaymentReceiptSerializer, UserSerializer,
-    ProfileSerializer, RoleSerializer, PhotographyPackageSerializer, PhotographerSerializer, PhotoSessionSerializer, AlertSerializer
+    ProfileSerializer, RoleSerializer, PhotographyPackageSerializer, PhotographerSerializer, PhotoSessionSerializer, AlertSerializer,
+    PermissionSerializer, ContentTypeSerializer # NEW: Import PermissionSerializer and ContentTypeSerializer
 )
+
+# ===========================================================================
+# ViewSet لعرض جميع الصلاحيات المتاحة
+# ===========================================================================
+class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Permission.objects.all().select_related('content_type').order_by('content_type__app_label', 'content_type__model', 'codename')
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAdminUser] # Only admin users can view all permissions
+
 
 # ===========================================================================
 # View لإدارة تسجيل الخروج (Logout)
@@ -69,21 +79,26 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        if self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists()):
+        # Allow users with 'print.view_user_list' to see all users
+        if self.request.user.has_perm('print.view_user_list'):
             return User.objects.all().select_related('profile').order_by('username')
+        # Otherwise, users can only see their own profile
         return User.objects.filter(id=self.request.user.id).select_related('profile')
 
     def perform_create(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
+        # Check for 'print.add_user' permission to create any user
+        if not self.request.user.has_perm('print.add_user'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء مستخدمين."})
+
         roles_data = self.request.data.get('roles', [])
-        if 'manager' in roles_data and not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
+        # If trying to assign 'manager' role, check for 'print.change_user_roles' permission
+        if 'manager' in roles_data and not self.request.user.has_perm('print.change_user_roles'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء مستخدم بدور مدير."})
         serializer.save()
 
     def perform_update(self, serializer):
-        is_manager = self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())
-        if self.get_object() != self.request.user and not is_manager:
+        # Check if the user is trying to update another user and if they have permission
+        if self.get_object() != self.request.user and not self.request.user.has_perm('print.change_user_roles'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل مستخدمين آخرين."})
 
         if 'roles' in self.request.data:
@@ -91,18 +106,23 @@ class UserViewSet(viewsets.ModelViewSet):
             current_user_profile = self.get_object().profile if hasattr(self.get_object(), 'profile') else None
             current_user_roles = [role.name for role in current_user_profile.roles.all()] if current_user_profile else []
 
-            if not is_manager:
+            # If not authorized to change roles, ensure no roles are changed
+            if not self.request.user.has_perm('print.change_user_roles'):
                 if set(new_roles) != set(current_user_roles):
                     raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتغيير دور المستخدم."})
             else:
+                # If the user is trying to remove their own manager role, ensure at least one manager remains
                 if self.get_object() == self.request.user and 'manager' not in new_roles:
                     if User.objects.filter(profile__roles__name='manager').count() <= 1:
                         raise serializers.ValidationError({"detail": "يجب أن يكون هناك مدير واحد على الأقل في النظام."})
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
+        # Check for 'print.delete_user' permission
+        if not self.request.user.has_perm('print.delete_user'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف المستخدمين."})
+
+        # Ensure at least one manager remains if trying to delete a manager
         if hasattr(instance, 'profile') and instance.profile.roles.filter(name='manager').exists():
             if User.objects.filter(profile__roles__name='manager').count() <= 1:
                 raise serializers.ValidationError({"detail": "لا يمكن حذف المدير الأخير في النظام."})
@@ -118,18 +138,37 @@ class ClientViewSet(viewsets.ModelViewSet):
     filterset_fields = ['name', 'phone', 'email']
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        search_term = self.request.query_params.get('search', None)
-        if search_term:
-            queryset = queryset.filter(
-                Q(name__icontains=search_term) |
-                Q(phone__icontains=search_term) |
-                Q(email__icontains=search_term)
-            )
-        return queryset
+        if self.request.user.has_perm('print.view_client'):
+            queryset = super().get_queryset()
+            search_term = self.request.query_params.get('search', None)
+            if search_term:
+                queryset = queryset.filter(
+                    Q(name__icontains=search_term) |
+                    Q(phone__icontains=search_term) |
+                    Q(email__icontains=search_term)
+                )
+            return queryset
+        return Client.objects.none() # Return empty if no permission
+
+    def perform_create(self, serializer):
+        if not self.request.user.has_perm('print.add_client'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء عملاء."})
+        serializer.save()
+
+    def perform_update(self, serializer):
+        if not self.request.user.has_perm('print.change_client'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل العملاء."})
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if not self.request.user.has_perm('print.delete_client'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف العملاء."})
+        instance.delete()
 
     @action(detail=True, methods=['get'])
     def printjobs(self, request, pk=None):
+        if not self.request.user.has_perm('print.view_printjob'):
+            return Response({'detail': 'ليس لديك صلاحية لعرض طلبات الطباعة.'}, status=status.HTTP_403_FORBIDDEN)
         client = self.get_object()
         print_jobs = client.print_jobs.all()
         serializer = PrintJobSerializer(print_jobs, many=True)
@@ -137,6 +176,8 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def receipts(self, request, pk=None):
+        if not self.request.user.has_perm('print.view_paymentreceipt'):
+            return Response({'detail': 'ليس لديك صلاحية لعرض الإيصالات.'}, status=status.HTTP_403_FORBIDDEN)
         client = self.get_object()
         receipts = PaymentReceipt.objects.filter(Q(printing__client=client) | Q(photography_session__client=client)).distinct().order_by('-date_issued')
         serializer = PaymentReceiptSerializer(receipts, many=True)
@@ -144,13 +185,17 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='photosessions')
     def photosessions(self, request, pk=None):
+        if not self.request.user.has_perm('print.view_photosession'):
+            return Response({'detail': 'ليس لديك صلاحية لعرض جلسات التصوير.'}, status=status.HTTP_403_FORBIDDEN)
         client = self.get_object()
         photo_sessions = client.photo_sessions.all().order_by('-created_at')
         serializer = PhotoSessionSerializer(photo_sessions, many=True)
-        return Response(serializer.data) # Fixed: changed serializer_sessions to serializer
+        return Response(serializer.data)
 
     @action(detail=True, methods=['get'], url_path='total-remaining-amount-combined')
     def total_remaining_amount_combined(self, request, pk=None):
+        if not self.request.user.has_perm('print.view_client'): # Or a more specific permission for reports
+            return Response({'detail': 'ليس لديك صلاحية لعرض ملخص المبالغ.'}, status=status.HTTP_403_FORBIDDEN)
         client = self.get_object()
         total_remaining_print_jobs = sum(job.remaining_amount for job in client.print_jobs.all())
         total_remaining_photo_sessions = sum(session.remaining_amount for session in client.photo_sessions.all())
@@ -178,6 +223,8 @@ class PrintJobViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        if not self.request.user.has_perm('print.add_printjob'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء طلبات طباعة."})
         print_job = serializer.save(issued_by=self.request.user)
         initial_paid_amount = print_job.paid_amount
         if initial_paid_amount > 0:
@@ -198,10 +245,19 @@ class PrintJobViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        if not self.request.user.has_perm('print.change_printjob'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل طلبات الطباعة."})
         serializer.save()
+
+    def perform_destroy(self, instance):
+        if not self.request.user.has_perm('print.delete_printjob'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف طلبات الطباعة."})
+        instance.delete()
 
     @action(detail=True, methods=['post'], url_path='add-payment')
     def add_payment(self, request, pk=None):
+        if not self.request.user.has_perm('print.add_paymentreceipt'):
+            return Response({'detail': 'ليس لديك صلاحية لإضافة دفعات.'}, status=status.HTTP_403_FORBIDDEN)
         print_job = self.get_object()
         amount = request.data.get('amount')
         payment_method = request.data.get('payment_method', 'cash')
@@ -248,6 +304,8 @@ class PrintJobViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='generate-final-invoice')
     def generate_final_invoice(self, request, pk=None):
+        if not self.request.user.has_perm('print.view_printjob'): # Or a more specific permission like 'print.generate_printjob_invoice'
+            return Response({'detail': 'ليس لديك صلاحية لإنشاء الفواتير.'}, status=status.HTTP_403_FORBIDDEN)
         print_job = self.get_object()
         if print_job.remaining_amount > 0:
             return Response({'detail': 'لا يمكن إنشاء فاتورة نهائية قبل دفع المبلغ بالكامل.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -304,16 +362,24 @@ class PaymentReceiptViewSet(viewsets.ModelViewSet):
     filterset_fields = ['receipt_type', 'payment_method', 'issued_by__username', 'receipt_number']
 
     def perform_create(self, serializer):
-        # NEW: Ensure total_amount and paid_amount are handled correctly for direct creation
-        # If total_amount is not provided, it might default or need to be calculated
-        # For simplicity, we assume it's provided in the serializer data or derived.
-        # If creating directly, you might need to ensure these fields are in serializer.validated_data
-        # or calculate them based on context.
-        # For now, we'll assume the serializer handles it correctly.
+        if not self.request.user.has_perm('print.add_paymentreceipt'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء إيصالات دفع."}) 
         serializer.save(issued_by=self.request.user)
+
+    def perform_update(self, serializer):
+        if not self.request.user.has_perm('print.change_paymentreceipt'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل إيصالات الدفع."}) 
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if not self.request.user.has_perm('print.delete_paymentreceipt'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف إيصالات الدفع."}) 
+        instance.delete()
 
     @action(detail=True, methods=['get'], url_path='generate-pdf-receipt')
     def generate_pdf_receipt(self, request, pk=None):
+        if not self.request.user.has_perm('print.view_paymentreceipt'):
+            return Response({'detail': 'ليس لديك صلاحية لعرض إيصالات الدفع.'}, status=status.HTTP_403_FORBIDDEN)
         receipt = self.get_object()
         company_info = {
             'name': 'استوديو الإبداع',
@@ -360,22 +426,22 @@ class PhotographyPackageViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        if self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists()):
+        if self.request.user.has_perm('print.view_photographypackage'):
             return PhotographyPackage.objects.all().order_by('price')
         return PhotographyPackage.objects.none() # Return an empty queryset if not authorized to view all
 
     def perform_create(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
+        if not self.request.user.has_perm('print.add_photographypackage'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء باقات تصوير جديدة."})
         serializer.save()
 
     def perform_update(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
+        if not self.request.user.has_perm('print.change_photographypackage'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل باقات التصوير."})
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
+        if not self.request.user.has_perm('print.delete_photographypackage'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف باقات التصوير."})
         instance.delete()
 
@@ -389,22 +455,22 @@ class PhotographerViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        if self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists()):
+        if self.request.user.has_perm('print.view_photographer'):
             return Photographer.objects.all().order_by('name')
         return Photographer.objects.none() # Return an empty queryset if not authorized to view all
 
     def perform_create(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
+        if not self.request.user.has_perm('print.add_photographer'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء مصورين جدد."})
         serializer.save()
 
     def perform_update(self, serializer):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
+        if not self.request.user.has_perm('print.change_photographer'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل المصورين."})
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not (self.request.user.is_staff or (hasattr(self.request.user, 'profile') and self.request.user.profile.roles.filter(name='manager').exists())):
+        if not self.request.user.has_perm('print.delete_photographer'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف المصورين."})
         instance.delete()
 
@@ -431,7 +497,7 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        if not (self.request.user.profile.roles.filter(name='manager').exists() or self.request.user.profile.roles.filter(name='receptionist').exists()):
+        if not self.request.user.has_perm('print.add_photosession'):
             raise serializers.ValidationError({"detail": "ليس لديك صلاحية لإنشاء جلسات تصوير."})
         photo_session = serializer.save(issued_by=self.request.user)
         initial_paid_amount = photo_session.paid_amount
@@ -453,10 +519,19 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        if not self.request.user.has_perm('print.change_photosession'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لتعديل جلسات التصوير."})
         serializer.save()
+
+    def perform_destroy(self, instance):
+        if not self.request.user.has_perm('print.delete_photosession'):
+            raise serializers.ValidationError({"detail": "ليس لديك صلاحية لحذف جلسات التصوير."})
+        instance.delete()
 
     @action(detail=True, methods=['post'], url_path='add-payment')
     def add_payment(self, request, pk=None):
+        if not self.request.user.has_perm('print.add_paymentreceipt'):
+            return Response({'detail': 'ليس لديك صلاحية لإضافة دفعات.'}, status=status.HTTP_403_FORBIDDEN)
         photo_session = self.get_object()
         amount = request.data.get('amount')
         payment_method = request.data.get('payment_method', 'cash')
@@ -503,6 +578,8 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='generate-booking-receipt')
     def generate_booking_receipt(self, request, pk=None):
+        if not self.request.user.has_perm('print.view_photosession'): # Or a more specific permission
+            return Response({'detail': 'ليس لديك صلاحية لإنشاء إيصالات الحجز.'}, status=status.HTTP_403_FORBIDDEN)
         photo_session = self.get_object()
         company_info = {
             'name': 'استوديو الإبداع',
@@ -515,6 +592,72 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
         company_logo_static_url = staticfiles_storage.url('images/logo.png')
         qr_data = f"Booking: {photo_session.receipt_number}\nClient: {photo_session.client.name}\nDate: {photo_session.session_date}\nPaid: {photo_session.paid_amount}"
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=4)
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        qr_code_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+        context = {
+            'photo_session': photo_session,
+            'client': photo_session.client,
+            'company': company_info,
+            'company_logo_absolute_url': company_logo_static_url,
+            'qr_code_base64': qr_code_base64,
+            'receipts': photo_session.payment_receipts.all().order_by('date_issued'),
+            'booking_receipt_color': '#FFD700',
+        }
+        html_string = render_to_string('print/photo_booking_receipt_template.html', context)
+        html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
+        pdf_file = html.write_pdf()
+        response = HttpResponse(pdf_file, content_type='application/pdf')
+        file_name = f"booking_receipt_photosession_{photo_session.receipt_number}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+        return response
+
+    @action(detail=True, methods=['get'], url_path='generate-final-invoice')
+    def generate_final_invoice(self, request, pk=None):
+        if not self.request.user.has_perm('print.view_photosession'): # Or a more specific permission
+            return Response({'detail': 'ليس لديك صلاحية لإنشاء الفواتير.'}, status=status.HTTP_403_FORBIDDEN)
+        photo_session = self.get_object()
+        if photo_session.remaining_amount > 0:
+            return Response({'detail': 'لا يمكن إنشاء فاتورة نهائية قبل دفع المبلغ بالكامل.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        company_info = {
+            'name': 'استوديو الإبداع',
+            'address': 'شارع الفن، مدينة الإبداع، 12345',
+            'phone': '01001234567',
+            'email': 'info@creative-studio.com',
+            'website': 'www.creative-studio.com',
+            'tax_id': 'VAT123456789',
+        }
+        company_logo_static_url = staticfiles_storage.url('images/logo.png')
+        qr_data = f"Photo Session: {photo_session.receipt_number}\nClient: {photo_session.client.name}\nTotal: {photo_session.total_amount}\nPaid: {photo_session.paid_amount}"
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=4)
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        qr_code_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+        context = {
+            'photo_session': photo_session,
+            'client': photo_session.client,
+            'company': company_info,
+            'company_logo_absolute_url': company_logo_static_url,
+            'qr_code_base64': qr_code_base64,
+            'receipts': photo_session.payment_receipts.all().order_by('date_issued'),
+            'final_receipt_color': '#ADD8E6',
+        }
+        html_string = render_to_string('print/photo_final_receipt_template.html', context)
+        html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
+        pdf_file = html.write_pdf()
+        response = HttpResponse(pdf_file, content_type='application/pdf')
+        file_name = f"final_receipt_photosession_{photo_session.receipt_number}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+        return response
         qr.add_data(qr_data)
         qr.make(fit=True)
         img = qr.make_image(fill_color="black", back_color="white")
@@ -587,6 +730,36 @@ class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
     permission_classes = [IsAdminUser]
+
+    @action(detail=True, methods=['get', 'put'], url_path='permissions')
+    def permissions(self, request, pk=None):
+        role = self.get_object()
+
+        if request.method == 'GET':
+            # Return all permissions associated with this role
+            serializer = PermissionSerializer(role.permissions.all(), many=True)
+            return Response(serializer.data)
+
+        elif request.method == 'PUT':
+            # Update permissions for this role
+            permission_codenames = request.data.get('permissions', []) # Expects a list of codenames
+            if not isinstance(permission_codenames, list):
+                return Response({'detail': "'permissions' must be a list of permission codenames."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Clear existing permissions and set new ones
+            role.permissions.clear()
+            for codename in permission_codenames:
+                try:
+                    app_label, codename_only = codename.split('.')
+                    permission = Permission.objects.get(codename=codename_only, content_type__app_label=app_label)
+                    role.permissions.add(permission)
+                except Permission.DoesNotExist:
+                    return Response({'detail': f'Permission with codename {codename} does not exist.'}, status=status.HTTP_400_BAD_REQUEST)
+                except ValueError:
+                    return Response({'detail': f'Invalid permission codename format: {codename}. Expected app_label.codename.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = RoleSerializer(role) # Re-serialize the role to show updated permissions
+            return Response(serializer.data)
 
 
 # ===========================================================================
