@@ -1,0 +1,134 @@
+--- MANUAL TRANSLATION GUIDE ---
+
+This guide outlines the process for manually translating your React frontend application using `react-i18next`.
+
+**Core Idea:** Replace every piece of static text in your React components with a translation key, and then define the actual translations for those keys in your `translation.json` files.
+
+---
+
+### Step-by-Step Manual Translation Process
+
+**Step 1: Choose a Component to Translate**
+Start with one component at a time. For example, `apps/src/components/ClientList.js`.
+
+**Step 2: Open the Component File**
+Open the chosen component file (e.g., `apps/src/components/ClientList.js`) in your text editor.
+
+**Step 3: Import `useTranslation` Hook**
+At the top of the component file, import the `useTranslation` hook:
+
+```javascript
+import React, { useState, useEffect, useCallback } from 'react';
+// ... other imports
+import { useTranslation } from 'react-i18next'; // Add this line
+```
+
+**Step 4: Initialize `useTranslation` in the Component**
+Inside your functional component, call `useTranslation()` to get the `t` function (for translation) and `i18n` (for language control, though `t` is what you'll use most often here):
+
+```javascript
+function ClientList({ onEditClient, onClientDeleted, showToast, searchTerm, isManager, onViewClientDetails }) {
+  const { authToken } = useAuth();
+  const { t } = useTranslation(); // Add this line
+  // ... rest of your component logic
+```
+
+**Step 5: Identify Static Text and Replace with Translation Keys**
+Go through the JSX code in the component and find any text that is directly displayed to the user. Replace it with `t('your_translation_key')`.
+
+**Example:**
+If you have:
+```html
+<h3 className="text-2xl font-semibold text-gray-800">إدارة العملاء</h3>
+```
+Change it to:
+```html
+<h3 className="text-2xl font-semibold text-gray-800">{t('client_management_title')}</h3>
+```
+
+**Important Considerations:**
+*   **Unique Keys:** Choose descriptive and unique keys for your translations (e.g., `client_management_title`, `add_new_client_button`, `table_header_username`).
+*   **Placeholders/Variables:** If your text includes dynamic content (like a username or a count), you can pass it as an object to the `t()` function.
+    **Example (from `App.js` for "Welcome, {{username}}"):**
+    ```javascript
+    <p className="font-semibold">{t('welcome_message', { username: user.username })}</p>
+    ```
+    In your `translation.json` file, you'd define it like this:
+    ```json
+    {
+      "welcome_message": "مرحباً، {{username}}"
+    }
+    ```
+    The `{{username}}` part is the placeholder.
+
+*   **Default Values:** If a translation key is not found, `i18next` will display the key itself by default. You can also provide a `defaultValue` as a fallback:
+    ```javascript
+    <label>{t('some_key', { defaultValue: 'Default English Text' })}</label>
+    ```
+
+**Step 6: Add Translations to `translation.json` Files**
+For every `t('your_translation_key')` you add in your component, you must add an entry to both `apps/src/locales/ar/translation.json` and `apps/src/locales/en/translation.json`.
+
+**Example (for `client_management_title`):**
+*   **`apps/src/locales/ar/translation.json`:**
+    ```json
+    {
+      "client_management_title": "إدارة العملاء",
+      // ... other translations
+    }
+    ```
+*   **`apps/src/locales/en/translation.json`:**
+    ```json
+    {
+      "client_management_title": "Client Management",
+      // ... other translations
+    }
+    ```
+
+**Step 7: Save Files and Restart Frontend Server**
+After making changes to a component file and its corresponding `translation.json` files, save all changes. Then, restart your React frontend development server (usually by stopping it with `Ctrl+C` and running `npm start` again in the `apps/` directory).
+
+**Step 8: Repeat for All Components**
+Continue this process for all your React components that display user-facing text.
+
+---
+
+### Example: Translating Permissions in `RolePermissionManagement.js`
+
+To translate permission names, which come from the backend, you can use a key based on the `perm.codename`.
+
+Change the relevant line in `apps/src/components/RolePermissionManagement.js` from:
+```javascript
+<label htmlFor={`perm-${perm.id}`} className="ml-2 text-sm text-gray-900">
+  {perm.name} ({perm.content_type.app_label}.{perm.codename})
+</label>
+```
+To:
+```javascript
+<label htmlFor={`perm-${perm.id}`} className="ml-2 text-sm text-gray-900">
+  {t(`permission_${perm.codename}`, { defaultValue: perm.name })} ({perm.content_type.app_label}.{perm.codename})
+</label>
+```
+
+Then, in your `translation.json` files, you would add entries like:
+
+*   **`apps/src/locales/ar/translation.json`:**
+    ```json
+    {
+      "permission_add_client": "يمكن إضافة عملاء",
+      "permission_change_client": "يمكن تعديل العملاء",
+      "permission_view_client": "يمكن عرض العملاء",
+      // ... and so on for all permissions
+    }
+    ```
+
+*   **`apps/src/locales/en/translation.json`:**
+    ```json
+    {
+      "permission_add_client": "Can add clients",
+      "permission_change_client": "Can change clients",
+      "permission_view_client": "Can view clients",
+      // ... and so on for all permissions
+    }
+    ```
+This approach allows you to provide specific translations for each permission. If a translation for a specific `codename` is not found, it will fall back to displaying `perm.name` (the original English name from Django), which is a good fallback.
