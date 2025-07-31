@@ -8,12 +8,13 @@ import Alerts from './components/Alerts';
 import ClientDetailsModal from './components/ClientDetailsModal';
 import PrintJobsTab from './components/PrintJobsTab';
 import PhotographyTab from './components/PhotographyTab';
-import ManagementTab from './components/ManagementTab'; // NEW: استيراد مكون الإدارة الجديد
+import ManagementTab from './components/ManagementTab';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
 
 import { getClientById } from './services/apiService';
+import { useTranslation } from 'react-i18next'; // NEW: Import useTranslation
 
 import {
   UsersIcon,
@@ -23,12 +24,13 @@ import {
   ArrowRightOnRectangleIcon,
   PlusCircleIcon,
   CameraIcon,
-  Cog6ToothIcon, // NEW: أيقونة لقسم الإدارة
+  Cog6ToothIcon,
 } from '@heroicons/react/24/solid';
 
 function AppContent() {
   const { isAuthenticated, user, loadingAuth, logout, isManager, authToken } = useAuth();
   const { showToast } = useToast();
+  const { t, i18n } = useTranslation(); // NEW: Initialize useTranslation
 
   const [activeTab, setActiveTab] = useState('print_jobs');
   const [selectedClientForDetails, setSelectedClientForDetails] = useState(null);
@@ -41,7 +43,7 @@ function AppContent() {
 
   const handleViewClientDetails = useCallback(async (clientId, initialTab = 'printing') => {
     if (!authToken) {
-      showToast('خطأ: لا يوجد توكن مصادقة. يرجى تسجيل الدخول.', 'error');
+      showToast(t('error_no_auth_token'), 'error'); // Use translation
       return;
     }
     try {
@@ -50,9 +52,9 @@ function AppContent() {
       setClientDetailsInitialTab(initialTab);
     } catch (error) {
       console.error('Error fetching client details:', error);
-      showToast(`فشل جلب تفاصيل العميل: ${error.message}`, 'error');
+      showToast(t('api_error_fetching_client_details', { error: error.message }), 'error'); // Use translation
     }
-  }, [authToken, showToast]);
+  }, [authToken, showToast, t]);
 
   const handleCloseClientDetailsModal = useCallback(() => {
     setSelectedClientForDetails(null);
@@ -60,14 +62,15 @@ function AppContent() {
   }, []);
 
   const handleClientSaved = useCallback(() => {
+    showToast(t('client_saved_success'), 'success'); // Use translation
     setShowAddClientForm(false);
     setEditingClientId(null);
     setInitialClientFormData(null);
-  }, []);
+  }, [showToast, t]);
 
   const handleEditClient = useCallback(async (clientId) => {
     if (!authToken) {
-      showToast('خطأ: لا يوجد توكن مصادقة. يرجى تسجيل الدخول.', 'error');
+      showToast(t('error_no_auth_token'), 'error'); // Use translation
       return;
     }
     try {
@@ -77,20 +80,24 @@ function AppContent() {
       setShowAddClientForm(true);
     } catch (error) {
       console.error('Error fetching client for edit:', error);
-      showToast(`فشل جلب بيانات العميل للتعديل: ${error.message}`, 'error');
+      showToast(t('api_error_fetching_client_details', { error: error.message }), 'error'); // Use translation
     }
-  }, [authToken, showToast]);
+  }, [authToken, showToast, t]);
 
   const handleClientDeleted = useCallback(() => {
-    showToast('تم حذف العميل بنجاح!', 'success');
-  }, [showToast]);
+    showToast(t('client_deleted_success'), 'success'); // Use translation
+  }, [showToast, t]);
+
+  const changeLanguage = (lng) => {
+    i18n.changeLanguage(lng);
+  };
 
   if (loadingAuth) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-700">جاري التحقق من المصادقة...</p>
+          <p className="mt-4 text-gray-700">{t('loading_auth')}</p> {/* Use translation */}
         </div>
       </div>
     );
@@ -106,8 +113,16 @@ function AppContent() {
       <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-4">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
           <h1 className="text-3xl font-bold mb-3 md:mb-0">
-            لوحة تحكم الاستوديو
+            {t('app_title')}
           </h1>
+          {isAuthenticated && user && (
+            <div className="text-right text-sm md:text-base">
+              <p className="font-semibold">{t('welcome_message', { username: user.username })}</p>
+              {user.userRoles && user.userRoles.length > 0 && (
+                <p className="text-xs opacity-80">{t('roles_label')}: {user.userRoles.join(', ')}</p>
+              )}
+            </div>
+          )}
           <nav className="flex flex-wrap justify-center md:justify-end gap-3 md:gap-4">
             <button
               onClick={() => setActiveTab('print_jobs')}
@@ -115,7 +130,7 @@ function AppContent() {
                 ${activeTab === 'print_jobs' ? 'bg-white text-blue-700 shadow-md' : 'text-white hover:bg-blue-500 hover:bg-opacity-75'}`}
             >
               <PrinterIcon className="h-6 w-6 ml-2" />
-              طلبات الطباعة
+              {t('print_jobs_tab')}
             </button>
             <button
               onClick={() => setActiveTab('photography')}
@@ -123,7 +138,7 @@ function AppContent() {
                 ${activeTab === 'photography' ? 'bg-white text-blue-700 shadow-md' : 'text-white hover:bg-blue-500 hover:bg-opacity-75'}`}
             >
               <CameraIcon className="h-6 w-6 ml-2" />
-              التصوير
+              {t('photography_tab')}
             </button>
             <button
               onClick={() => setActiveTab('clients')}
@@ -131,7 +146,7 @@ function AppContent() {
                 ${activeTab === 'clients' ? 'bg-white text-blue-700 shadow-md' : 'text-white hover:bg-blue-500 hover:bg-opacity-75'}`}
             >
               <UsersIcon className="h-6 w-6 ml-2" />
-              العملاء
+              {t('clients_tab')}
             </button>
             {isManager && (
               <button
@@ -140,17 +155,17 @@ function AppContent() {
                   ${activeTab === 'reports' ? 'bg-white text-blue-700 shadow-md' : 'text-white hover:bg-blue-500 hover:bg-opacity-75'}`}
               >
                 <ChartBarIcon className="h-6 w-6 ml-2" />
-                التقارير
+                {t('reports_tab')}
               </button>
             )}
-            {isManager && ( // NEW: تبويب الإدارة مرئي للمديرين فقط
+            {isManager && (
               <button
                 onClick={() => setActiveTab('management')}
                 className={`flex items-center px-4 py-2 rounded-full text-lg font-medium transition-all duration-300
                   ${activeTab === 'management' ? 'bg-white text-blue-700 shadow-md' : 'text-white hover:bg-blue-500 hover:bg-opacity-75'}`}
               >
-                <Cog6ToothIcon className="h-6 w-6 ml-2" /> {/* أيقونة الإدارة */}
-                الإدارة
+                <Cog6ToothIcon className="h-6 w-6 ml-2" />
+                {t('management_tab')}
               </button>
             )}
             <button
@@ -159,15 +174,29 @@ function AppContent() {
                 ${activeTab === 'alerts' ? 'bg-white text-blue-700 shadow-md' : 'text-white hover:bg-blue-500 hover:bg-opacity-75'}`}
             >
               <BellIcon className="h-6 w-6 ml-2" />
-              التنبيهات
+              {t('alerts_tab')}
             </button>
             <button
               onClick={logout}
               className="flex items-center px-4 py-2 rounded-full text-lg font-medium bg-red-500 hover:bg-red-600 transition-all duration-300 text-white shadow-md"
             >
               <ArrowRightOnRectangleIcon className="h-6 w-6 ml-2" />
-              تسجيل الخروج
+              {t('logout_button')}
             </button>
+            {/* Language Switcher */}
+            <div className="relative inline-block text-left">
+              <select
+                onChange={(e) => changeLanguage(e.target.value)}
+                value={i18n.language}
+                className="block appearance-none w-full bg-white border border-gray-300 text-gray-700 py-2 px-4 pr-8 rounded-full shadow leading-tight focus:outline-none focus:bg-white focus:border-blue-500"
+              >
+                <option value="ar">العربية</option>
+                <option value="en">English</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+              </div>
+            </div>
           </nav>
         </div>
       </header>
@@ -179,12 +208,12 @@ function AppContent() {
           <>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-3xl font-semibold text-gray-800">
-                إدارة العملاء
+                {t('client_management_title')}
               </h2>
               <div className="flex items-center space-x-4 space-x-reverse">
                 <input
                   type="text"
-                  placeholder="بحث عن عميل..."
+                  placeholder={t('search_client_placeholder')}
                   value={clientSearchTerm}
                   onChange={(e) => setClientSearchTerm(e.target.value)}
                   className="p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-64"
@@ -198,7 +227,7 @@ function AppContent() {
                   className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full shadow-lg flex items-center transition duration-300 transform hover:scale-105"
                 >
                   <PlusCircleIcon className="h-6 w-6 ml-2" />
-                  إضافة عميل جديد
+                  {t('add_new_client_button')}
                 </button>
               </div>
             </div>
@@ -238,7 +267,7 @@ function AppContent() {
         )}
         {activeTab === 'reports' && !isManager && (
           <div className="text-center text-red-600 text-2xl font-semibold p-10">
-            ليس لديك صلاحية لعرض التقارير والإحصائيات.
+            {t('no_permission_reports')}
           </div>
         )}
 
@@ -253,7 +282,7 @@ function AppContent() {
         )}
         {activeTab === 'management' && !isManager && (
           <div className="text-center text-red-600 text-2xl font-semibold p-10">
-            ليس لديك صلاحية للوصول إلى قسم الإدارة.
+            {t('no_permission_management')}
           </div>
         )}
       </div>

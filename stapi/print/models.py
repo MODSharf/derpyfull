@@ -354,6 +354,7 @@ class Alert(models.Model):
     is_read = models.BooleanField(default=False, verbose_name='تمت القراءة')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='alerts', verbose_name='المستخدم المستهدف')
+    roles = models.ManyToManyField(Role, related_name='alerts', blank=True, verbose_name='الأدوار المستهدفة') # NEW: Link to roles
 
     class Meta:
         verbose_name = 'تنبيه'

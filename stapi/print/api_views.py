@@ -238,11 +238,15 @@ class PrintJobViewSet(viewsets.ModelViewSet):
                 issued_by=self.request.user
             )
         # Create an alert for the new print job
-        Alert.objects.create(
+        alert = Alert.objects.create(
             message=f"تم إنشاء طلب طباعة جديد للعميل {print_job.client.name} برقم إيصال {print_job.receipt_number}.",
             alert_type='new_job',
-            user=self.request.user,
+            # user=self.request.user, # Remove direct user assignment
         )
+        # Assign alert to specific roles
+        printer_role = Role.objects.get(name='printer')
+        manager_role = Role.objects.get(name='manager')
+        alert.roles.add(printer_role, manager_role)
 
     def perform_update(self, serializer):
         if not self.request.user.has_perm('print.change_printjob'):
@@ -512,11 +516,15 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
                 issued_by=self.request.user
             )
         # Create an alert for the new photo session
-        Alert.objects.create(
+        alert = Alert.objects.create(
             message=f"تم إنشاء جلسة تصوير جديدة للعميل {photo_session.client.name} برقم إيصال {photo_session.receipt_number}.",
             alert_type='new_job',
-            user=self.request.user,
+            # user=self.request.user, # Remove direct user assignment
         )
+        # Assign alert to specific roles
+        photographer_role = Role.objects.get(name='photographer')
+        manager_role = Role.objects.get(name='manager')
+        alert.roles.add(photographer_role, manager_role)
 
     def perform_update(self, serializer):
         if not self.request.user.has_perm('print.change_photosession'):
@@ -783,10 +791,11 @@ class AlertViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """ 
         This view should return a list of all the alerts
-        for the currently authenticated user.
+        for the currently authenticated user based on their roles.
         """
-        alerts = Alert.objects.filter(user=self.request.user).order_by('-created_at')
-        print(f"DEBUG: get_queryset for user {self.request.user.username} returning {alerts.count()} alerts.")
+        user_roles = self.request.user.profile.roles.all()
+        alerts = Alert.objects.filter(roles__in=user_roles).order_by('-created_at').distinct()
+        print(f"DEBUG: get_queryset for user {self.request.user.username} (roles: {user_roles}) returning {alerts.count()} alerts.")
         return alerts
 
     @action(detail=True, methods=['post'], url_path='mark-as-read')
