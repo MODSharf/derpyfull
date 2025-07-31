@@ -1216,3 +1216,22 @@
       }
       return await response.json();
     };
+
+    /**
+     * جلب الصلاحيات لدور محدد.
+     * @param {string} authToken - توكن المصادقة.
+     * @param {number} roleId - معرف الدور.
+     * @returns {Promise<Array>} - مصفوفة من كائنات الصلاحيات.
+     */
+    export const getRolePermissions = async (authToken, roleId) => {
+      const response = await fetch(`${API_BASE_URL}/roles/${roleId}/permissions/`, {
+        headers: {
+          'Authorization': `Token ${authToken}`,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch role permissions');
+      }
+      return await response.json();
+    };

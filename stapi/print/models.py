@@ -33,6 +33,7 @@ class Profile(models.Model):
             ("view_user_list", "Can view list of all users"),
             ("add_user", "Can add new users"),
             ("change_user_roles", "Can change user roles"),
+            ("change_user_permissions", "Can change user permissions"),
             ("delete_user", "Can delete users"),
         ]
 

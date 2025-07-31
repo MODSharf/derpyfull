@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getRoles, getPermissions, updateRolePermissions } from '../services/apiService';
+import { getRoles, getPermissions, updateRolePermissions, getRolePermissions } from '../services/apiService';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 
@@ -50,8 +50,8 @@ function RolePermissionManagement() {
     if (role) {
       try {
         setLoading(true);
-        const permissionsData = await getPermissions(authToken, role.id); // Fetch permissions for the selected role
-        setRolePermissions(new Set(permissionsData.map(p => `${p.content_type.app_label}.${p.codename}`)));
+        const permissionsData = await getRolePermissions(authToken, role.id); // Fetch permissions for the selected role
+        setRolePermissions(new Set(permissionsData.map(p => `${p.app_label}.${p.codename}`)));
       } catch (err) {
         console.error('Error fetching role permissions:', err);
         setError(`Failed to load role permissions: ${err.message}`);
@@ -134,13 +134,13 @@ function RolePermissionManagement() {
                 <input
                   type="checkbox"
                   id={`perm-${perm.id}`}
-                  value={`${perm.content_type.app_label}.${perm.codename}`}
-                  checked={rolePermissions.has(`${perm.content_type.app_label}.${perm.codename}`)}
+                  value={`${perm.app_label}.${perm.codename}`}
+                  checked={rolePermissions.has(`${perm.app_label}.${perm.codename}`)}
                   onChange={handlePermissionChange}
                   className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <label htmlFor={`perm-${perm.id}`} className="ml-2 text-sm text-gray-900">
-                  {t(`permission_${perm.codename}`, perm.name)} ({perm.content_type.app_label}.{perm.codename})
+                  {t(`permission_${perm.codename}`, perm.name)} ({perm.app_label}.{perm.codename})
                 </label>
               </div>
             ))}

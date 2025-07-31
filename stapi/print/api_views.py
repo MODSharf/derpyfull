@@ -4,6 +4,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from .permissions import CanChangeUserPermissions
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.conf import settings
@@ -22,7 +23,7 @@ from rest_framework.views import APIView
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
 
-from django.contrib.auth.models import User, Permission # Import Permission
+from django.contrib.auth.models import User, Permission, Group
 from django.db import models
 from django.db.models import Q
 
@@ -32,7 +33,7 @@ from .models import Client, PrintJob, PaymentReceipt, Profile, Role, Photography
 from .serializers import (
     ClientSerializer, PrintJobSerializer, PaymentReceiptSerializer, UserSerializer,
     ProfileSerializer, RoleSerializer, PhotographyPackageSerializer, PhotographerSerializer, PhotoSessionSerializer, AlertSerializer,
-    PermissionSerializer, ContentTypeSerializer # NEW: Import PermissionSerializer and ContentTypeSerializer
+    PermissionSerializer, ContentTypeSerializer, GroupSerializer
 )
 
 # ===========================================================================
@@ -738,39 +739,42 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
 # ===========================================================================
 # ViewSet لملفات التعريف (Profiles) - يستخدم بشكل أساسي لإدارة الأدوار
 # ===========================================================================
+from .permissions import CanChangeUserPermissions
+
 class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, CanChangeUserPermissions]
 
     @action(detail=True, methods=['get', 'put'], url_path='permissions')
     def permissions(self, request, pk=None):
         role = self.get_object()
+        group, created = Group.objects.get_or_create(name=role.name)
 
         if request.method == 'GET':
-            # Return all permissions associated with this role
-            serializer = PermissionSerializer(role.permissions.all(), many=True)
+            # Return all permissions associated with this role's group
+            serializer = PermissionSerializer(group.permissions.all(), many=True)
             return Response(serializer.data)
 
         elif request.method == 'PUT':
-            # Update permissions for this role
+            # Update permissions for this role's group
             permission_codenames = request.data.get('permissions', []) # Expects a list of codenames
             if not isinstance(permission_codenames, list):
                 return Response({'detail': "'permissions' must be a list of permission codenames."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Clear existing permissions and set new ones
-            role.permissions.clear()
+            group.permissions.clear()
             for codename in permission_codenames:
                 try:
                     app_label, codename_only = codename.split('.')
                     permission = Permission.objects.get(codename=codename_only, content_type__app_label=app_label)
-                    role.permissions.add(permission)
+                    group.permissions.add(permission)
                 except Permission.DoesNotExist:
                     return Response({'detail': f'Permission with codename {codename} does not exist.'}, status=status.HTTP_400_BAD_REQUEST)
                 except ValueError:
                     return Response({'detail': f'Invalid permission codename format: {codename}. Expected app_label.codename.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            serializer = RoleSerializer(role) # Re-serialize the role to show updated permissions
+            serializer = GroupSerializer(group) # Re-serialize the group to show updated permissions
             return Response(serializer.data)
 
 
