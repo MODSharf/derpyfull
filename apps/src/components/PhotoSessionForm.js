@@ -438,7 +438,7 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
         </select>
       </div>
 
-      {/* Photographer Select - Disabled for employees, enabled for managers */}
+      {/* Photographer Select */}
       <div>
         <label htmlFor="photographer_id" className="block text-sm font-medium text-gray-700 mb-1">
           المصور المعين
@@ -449,7 +449,6 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
           value={formData.photographer_id}
           onChange={handleChange}
           className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          disabled={!isManager} // Disable if not manager
         >
           <option value="">اختر مصور (اختياري)</option>
           {photographers.map((photographer) => (
@@ -458,11 +457,6 @@ function PhotoSessionForm({ onSessionSaved, sessionId, initialData, isManager })
             </option>
           ))}
         </select>
-        {!isManager && (
-          <p className="mt-1 text-sm text-gray-500">
-            * يمكن للمديرين فقط تعيين المصور بعد إنشاء الجلسة.
-          </p>
-        )}
       </div>
 
       {/* Session Date */}

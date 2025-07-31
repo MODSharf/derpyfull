@@ -106,6 +106,9 @@ class PrintJob(models.Model):
         verbose_name = 'طلب طباعة'
         verbose_name_plural = 'طلبات الطباعة'
         ordering = ['-created_at']
+        permissions = [
+            ("process_print_job_payments", "Can process payments for print jobs"),
+        ]
 
     def __str__(self):
         return f"طلب طباعة #{self.receipt_number or self.id} - {self.client.name}"
@@ -250,6 +253,11 @@ class PhotoSession(models.Model):
         verbose_name = 'جلسة تصوير'
         verbose_name_plural = 'جلسات التصوير'
         ordering = ['-session_date', '-session_time']
+        permissions = [
+            ("change_session_schedule", "Can change photo session date and time"),
+            ("assign_session_photographer", "Can assign photographer to a session"),
+            ("process_session_payments", "Can process payments for photo sessions"),
+        ]
 
     def __str__(self):
         return f"جلسة تصوير #{self.receipt_number or self.id} - {self.client.name} - {self.session_date}"

@@ -512,5 +512,9 @@
   "permission_add_session": "يمكن إضافة جلسة",
   "permission_change_session": "يمكن تغيير جلسة",
   "permission_delete_session": "يمكن حذف جلسة",
-  "permission_view_session": "يمكن عرض جلسة"
+  "permission_view_session": "يمكن عرض جلسة",
+  "permission_process_print_job_payments": "يمكنه معالجة دفعات طلبات الطباعة",
+  "permission_change_session_schedule": "يمكنه تغيير تاريخ ووقت جلسة التصوير",
+  "permission_assign_session_photographer": "يمكنه تعيين مصور لجلسة",
+  "permission_process_session_payments": "يمكنه معالجة دفعات جلسات التصوير"
 }

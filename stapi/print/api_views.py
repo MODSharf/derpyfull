@@ -39,9 +39,13 @@ from .serializers import (
 # ViewSet لعرض جميع الصلاحيات المتاحة
 # ===========================================================================
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Permission.objects.all().select_related('content_type').order_by('content_type__app_label', 'content_type__model', 'codename')
     serializer_class = PermissionSerializer
-    permission_classes = [IsAdminUser] # Only admin users can view all permissions
+    permission_classes = [IsAuthenticated] # Allow any authenticated user to see the list of permissions
+    pagination_class = None # Disable pagination for this viewset
+
+    def get_queryset(self):
+        # Filter permissions to only include those from the 'print' app
+        return Permission.objects.filter(content_type__app_label='print').select_related('content_type').order_by('content_type__model', 'codename')
 
 
 # ===========================================================================

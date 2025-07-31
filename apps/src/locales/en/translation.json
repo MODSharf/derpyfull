@@ -511,5 +511,9 @@
   "permission_add_session": "Can add session",
   "permission_change_session": "Can change session",
   "permission_delete_session": "Can delete session",
-  "permission_view_session": "Can view session"
+  "permission_view_session": "Can view session",
+  "permission_process_print_job_payments": "Can process payments for print jobs",
+  "permission_change_session_schedule": "Can change photo session date and time",
+  "permission_assign_session_photographer": "Can assign photographer to a session",
+  "permission_process_session_payments": "Can process payments for photo sessions"
 }

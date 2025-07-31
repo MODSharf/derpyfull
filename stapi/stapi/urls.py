@@ -21,7 +21,7 @@ router.register(r'photographers', api_views.PhotographerViewSet)
 router.register(r'photosessions', api_views.PhotoSessionViewSet)
 router.register(r'alerts', api_views.AlertViewSet)
 router.register(r'roles', api_views.RoleViewSet) # NEW: Register RoleViewSet
-router.register(r'permissions', api_views.PermissionViewSet) # NEW: Register PermissionViewSet
+router.register(r'permissions', api_views.PermissionViewSet, basename='permission') # NEW: Register PermissionViewSet
 
 
 urlpatterns = [
