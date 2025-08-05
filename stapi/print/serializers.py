@@ -11,7 +11,7 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = '__all__'
  # Import Permission model
 from django.contrib.contenttypes.models import ContentType
-from .models import Client, PrintJob, PaymentReceipt, Profile, Role, PhotographyPackage, Photographer, PhotoSession, Alert
+from .models import Client, PrintJob, PaymentReceipt, Profile, Role, PhotographyPackage, Photographer, PhotoSession, Alert, PrintJobItem
 
 
 class PermissionSerializer(serializers.ModelSerializer):
@@ -181,33 +181,95 @@ class PaymentReceiptSerializer(serializers.ModelSerializer):
 # ===========================================================================
 # 7. Print Job Serializer
 # ===========================================================================
+class PrintJobItemSerializer(serializers.ModelSerializer):
+    print_type_display = serializers.CharField(source='get_print_type_display', read_only=True)
+    size_display = serializers.CharField(source='get_size_display', read_only=True)
+    material_display = serializers.CharField(source='get_material_display', read_only=True)
+    total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = PrintJobItem
+        fields = '__all__'
+        read_only_fields = ['print_job']
+
+
+# ===========================================================================
+# 7. Print Job Serializer
+# ===========================================================================
 class PrintJobSerializer(serializers.ModelSerializer):
     client = ClientSerializer(read_only=True)
     client_id = serializers.PrimaryKeyRelatedField(queryset=Client.objects.all(), source='client', write_only=True)
 
-    print_type_display = serializers.CharField(source='get_print_type_display', read_only=True)
-    size_display = serializers.CharField(source='get_size_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    financial_status = serializers.CharField(source='get_financial_status_display', read_only=True)
+    financial_status_display = serializers.CharField(source='get_financial_status_display', read_only=True)
 
+    total_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    paid_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     remaining_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     payment_receipts = PaymentReceiptSerializer(many=True, read_only=True)
+    items = PrintJobItemSerializer(many=True, required=False) # Nested serializer for items
 
     issued_by_username = serializers.CharField(source='issued_by.username', read_only=True)
-
-    def get_financial_status_display(self, obj):
-        return obj.get_financial_status_display()
 
     class Meta:
         model = PrintJob
         fields = [
-            'id', 'receipt_number', 'client', 'client_id', 'print_type', 'print_type_display',
-            'size', 'size_display', 'total_amount', 'paid_amount', 'remaining_amount',
-            'delivery_date', 'status', 'status_display', 'notes', 'financial_status', 'issued_by',
-            'issued_by_username', 'created_at', 'updated_at', 'payment_receipts', 'get_financial_status_display'
+            'id', 'receipt_number', 'client', 'client_id', 
+            'total_amount', 'paid_amount', 'remaining_amount',
+            'delivery_date', 'status', 'status_display', 'notes', 'design_file_info', 
+            'financial_status', 'financial_status_display', 'issued_by',
+            'issued_by_username', 'created_at', 'updated_at', 'payment_receipts', 'items'
         ]
-        read_only_fields = ['receipt_number', 'created_at', 'updated_at', 'issued_by', 'remaining_amount']
+        read_only_fields = ['receipt_number', 'created_at', 'updated_at', 'issued_by', 'total_amount', 'paid_amount', 'remaining_amount']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        
+        # Create PrintJob instance first to get a primary key
+        print_job = PrintJob.objects.create(**validated_data)
+        
+        # Create PrintJobItem instances and link them to the PrintJob
+        for item_data in items_data:
+            PrintJobItem.objects.create(print_job=print_job, **item_data)
+
+        # Generate receipt number and update financial status after items are created
+        if not print_job.receipt_number:
+            now = timezone.now()
+            print_job.receipt_number = f"PRN-{now.strftime('%Y%m%d%H%M%S')}-{print_job.id}"
+        
+        # Update financial status based on calculated total and paid amounts
+        if print_job.total_amount > 0 and print_job.paid_amount >= print_job.total_amount:
+            print_job.financial_status = 'completed'
+        else:
+            print_job.financial_status = 'incomplete'
+
+        print_job.save(update_fields=['receipt_number', 'financial_status'])
+
+        return print_job
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+
+        # Update simple fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        # Handle nested items
+        if items_data is not None:
+            instance.items.all().delete() # Clear existing items
+            for item_data in items_data:
+                PrintJobItem.objects.create(print_job=instance, **item_data)
+
+        # Update financial status after items are updated
+        if instance.total_amount > 0 and instance.paid_amount >= instance.total_amount:
+            instance.financial_status = 'completed'
+        else:
+            instance.financial_status = 'incomplete'
+
+        instance.save() # Save to trigger financial_status update
+
+        return instance
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -376,7 +438,9 @@ class AlertSerializer(serializers.ModelSerializer):
         related_obj = self._get_related_object(obj)
         if related_obj:
             if isinstance(related_obj, PrintJob):
-                return related_obj.get_print_type_display()
+                # For PrintJob, get print types from its items
+                item_print_types = [item.get_print_type_display() for item in related_obj.items.all()]
+                return ", ".join(item_print_types) if item_print_types else "Print Job"
             elif isinstance(related_obj, PhotoSession):
                 return related_obj.get_event_type_display() or related_obj.package.name if related_obj.package else "Photo Session"
         return "N/A"

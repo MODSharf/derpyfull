@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin # استيراد UserAdmin الأصلي
 from django.contrib.auth.models import User
 # استيراد النماذج الجديدة: PhotographyPackage, Photographer, PhotoSession
-from .models import Client, PrintJob, PaymentReceipt, Profile, Role, PhotographyPackage, Photographer, PhotoSession
+from .models import Client, PrintJob, PaymentReceipt, Profile, Role, PhotographyPackage, Photographer, PhotoSession, PrintJobItem
 
 # ===========================================================================
 # تسجيل النماذج في لوحة الإدارة
@@ -21,15 +21,20 @@ class ClientAdmin(admin.ModelAdmin):
     ordering = ('-created_at',)
 
 # تسجيل نموذج طلب الطباعة
+class PrintJobItemInline(admin.TabularInline):
+    model = PrintJobItem
+    extra = 1 # Number of empty forms to display
+
 @admin.register(PrintJob)
 class PrintJobAdmin(admin.ModelAdmin):
-    list_display = ('receipt_number', 'client', 'print_type', 'size', 'total_amount', 'paid_amount', 'remaining_amount', 'status', 'delivery_date', 'issued_by')
-    list_filter = ('status', 'print_type', 'size', 'delivery_date')
-    search_fields = ('receipt_number', 'client__name', 'notes', 'issued_by')
-    raw_id_fields = ('client',) # لتحسين أداء اختيار العميل إذا كان هناك عدد كبير من العملاء
+    list_display = ('receipt_number', 'client', 'total_amount', 'paid_amount', 'remaining_amount', 'status', 'delivery_date', 'design_file_info', 'issued_by')
+    list_filter = ('status', 'delivery_date')
+    search_fields = ('receipt_number', 'client__name', 'notes', 'issued_by__username')
+    raw_id_fields = ('client', 'issued_by')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    readonly_fields = ('remaining_amount', 'receipt_number', 'issued_by') # جعل هذه الحقول للقراءة فقط في لوحة الإدارة
+    readonly_fields = ('remaining_amount', 'receipt_number', 'total_amount', 'paid_amount') # total_amount and paid_amount are properties now
+    inlines = [PrintJobItemInline]
 
 # تسجيل نموذج إيصال الدفع
 @admin.register(PaymentReceipt)

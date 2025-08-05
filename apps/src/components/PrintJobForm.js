@@ -23,13 +23,11 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
 
   const [formData, setFormData] = useState({
     client: '', // سيبقى هذا الاسم في حالة الـ formData لتطابق الـ select
-    print_type: '',
-    size: '',
-    total_amount: '',
-    paid_amount: '',
     delivery_date: '',
     status: 'pending', // Default status
     notes: '',
+    design_file_info: '', // New field
+    items: [], // New: Array to hold print job items
   });
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +38,7 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
   // Ref to hold the ClientForm's internal submit function
   const clientFormSubmitHandlerRef = useRef(null); // Added for ClientForm submission
 
-  // تعريف خيارات نوع الطباعة والحجم هنا لتتوافق مع models.py
+  // تعريف خيارات نوع الطباعة والحجم والمادة هنا لتتوافق مع models.py
   const PRINT_TYPE_OPTIONS = [
     { value: 'digital', label: 'طباعة رقمية' },
     { value: 'offset', label: 'طباعة أوفست' },
@@ -55,6 +53,14 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
     { value: 'A2', label: 'A2' },
     { value: 'A1', label: 'A1' },
     { value: 'custom', label: 'مقاس خاص' },
+  ];
+
+  const MATERIAL_OPTIONS = [
+    { value: 'paper', label: 'ورق' },
+    { value: 'cardboard', label: 'كرتون' },
+    { value: 'vinyl', label: 'فينيل' },
+    { value: 'fabric', label: 'قماش' },
+    { value: 'other', label: 'أخرى' },
   ];
 
   const STATUS_OPTIONS = [
@@ -95,26 +101,21 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
   useEffect(() => {
     if (initialData) {
       setFormData({
-        client: initialData.client?.id || '', // استخدام client.id لتعيين القيمة في الـ select
-        print_type: initialData.print_type || '',
-        size: initialData.size || '',
-        total_amount: initialData.total_amount || '',
-        paid_amount: initialData.paid_amount || '',
+        client: initialData.client?.id || '',
         delivery_date: initialData.delivery_date || '',
         status: initialData.status || 'pending',
         notes: initialData.notes || '',
+        design_file_info: initialData.design_file_info || '',
+        items: initialData.items || [], // Populate items array
       });
     } else {
       // Reset form for new job if initialData is null
       setFormData({
         client: '',
-        print_type: '',
-        size: '',
-        total_amount: '',
-        paid_amount: '',
         delivery_date: '',
         status: 'pending',
         notes: '',
+        items: [{ id: Date.now(), description: '', print_type: '', size: '', material: '', quantity: '', unit_price: '' }], // Start with one empty item
       });
     }
   }, [initialData]);
@@ -125,6 +126,33 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
       ...prevData,
       [name]: value,
     }));
+  }, []);
+
+  const handleItemChange = useCallback((index, e) => {
+    const { name, value } = e.target;
+    setFormData((prevData) => {
+      const newItems = [...prevData.items];
+      newItems[index] = {
+        ...newItems[index],
+        [name]: value,
+      };
+      return { ...prevData, items: newItems };
+    });
+  }, []);
+
+  const handleAddPrintJobItem = useCallback(() => {
+    setFormData((prevData) => ({
+      ...prevData,
+      items: [...prevData.items, { id: Date.now(), description: '', print_type: '', size: '', material: '', quantity: '', unit_price: '' }],
+    }));
+  }, []);
+
+  const handleRemovePrintJobItem = useCallback((index) => {
+    setFormData((prevData) => {
+      const newItems = [...prevData.items];
+      newItems.splice(index, 1);
+      return { ...prevData, items: newItems };
+    });
   }, []);
 
   const handleSubmit = useCallback(async (e) => {
@@ -140,15 +168,16 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
       let response;
       const dataToSubmit = {
         ...formData,
-        // Ensure numeric fields are parsed correctly
-        total_amount: parseFloat(formData.total_amount),
-        paid_amount: parseFloat(formData.paid_amount),
-        // <--- التعديل هنا: إرسال client_id بدلاً من client
-        client_id: parseInt(formData.client, 10), // استخدام client_id
+        client_id: parseInt(formData.client, 10),
+        // Map items to ensure numeric fields are parsed correctly
+        items: formData.items.map(item => ({
+          ...item,
+          quantity: parseInt(item.quantity, 10),
+          unit_price: parseFloat(item.unit_price),
+        })),
       };
       // حذف حقل 'client' الأصلي لتجنب إرساله مرتين أو بأسماء مختلفة
       delete dataToSubmit.client;
-
 
       if (printJobId) {
         // In edit mode
@@ -179,6 +208,8 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
           errorMessage = `خطأ العميل: ${errorData.client_id.join(', ')}`;
         } else if (errorData.detail) {
           errorMessage = errorData.detail;
+        } else if (errorData.items) {
+          errorMessage = `خطأ في عناصر الطباعة: ${JSON.stringify(errorData.items)}`;
         } else {
           errorMessage = err.message;
         }
@@ -251,6 +282,7 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
     // If not a manager and it's an existing job (edit mode)
     if (!isManager && printJobId) {
       // Allow status to be editable for employees
+      // Disable all other fields, including the ability to add/remove items
       return fieldName !== 'status';
     }
     // If it's a new job (add mode), all fields should be editable (assuming only managers add new jobs)
@@ -301,85 +333,152 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
           </div>
         </div>
 
-        {/* Print Type */}
-        <div>
-          <label htmlFor="print_type" className="block text-sm font-medium text-gray-700 mb-1">
-            نوع الطباعة
-          </label>
-          <select
-            id="print_type"
-            name="print_type"
-            value={formData.print_type}
-            onChange={handleChange}
-            required
-            className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            disabled={isFieldDisabled('print_type')}
+        {/* Print Job Items */}
+        <div className="space-y-4 border p-4 rounded-md bg-gray-50">
+          <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">عناصر طلب الطباعة</h3>
+          {formData.items.map((item, index) => (
+            <div key={item.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border p-3 rounded-md bg-white shadow-sm relative">
+              {formData.items.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleRemovePrintJobItem(index)}
+                  className="absolute top-2 right-2 text-red-500 hover:text-red-700"
+                  title="حذف عنصر الطباعة"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              )}
+              {/* Description */}
+              <div>
+                <label htmlFor={`description-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
+                  الوصف
+                </label>
+                <input
+                  type="text"
+                  id={`description-${index}`}
+                  name="description"
+                  value={item.description}
+                  onChange={(e) => handleItemChange(index, e)}
+                  required
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  disabled={isFieldDisabled('items')}
+                />
+              </div>
+
+              {/* Print Type */}
+              <div>
+                <label htmlFor={`print_type-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
+                  نوع الطباعة
+                </label>
+                <select
+                  id={`print_type-${index}`}
+                  name="print_type"
+                  value={item.print_type}
+                  onChange={(e) => handleItemChange(index, e)}
+                  required
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  disabled={isFieldDisabled('items')}
+                >
+                  <option value="">اختر نوع الطباعة...</option>
+                  {PRINT_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Size */}
+              <div>
+                <label htmlFor={`size-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
+                  المقاس
+                </label>
+                <select
+                  id={`size-${index}`}
+                  name="size"
+                  value={item.size}
+                  onChange={(e) => handleItemChange(index, e)}
+                  required
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  disabled={isFieldDisabled('items')}
+                >
+                  <option value="">اختر المقاس...</option>
+                  {SIZE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Material */}
+              <div>
+                <label htmlFor={`material-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
+                  الخامة
+                </label>
+                <select
+                  id={`material-${index}`}
+                  name="material"
+                  value={item.material}
+                  onChange={(e) => handleItemChange(index, e)}
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  disabled={isFieldDisabled('items')}
+                >
+                  <option value="">اختر الخامة...</option>
+                  {MATERIAL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label htmlFor={`quantity-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
+                  الكمية
+                </label>
+                <input
+                  type="number"
+                  id={`quantity-${index}`}
+                  name="quantity"
+                  value={item.quantity}
+                  onChange={(e) => handleItemChange(index, e)}
+                  required
+                  min="1"
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  disabled={isFieldDisabled('items')}
+                />
+              </div>
+
+              {/* Unit Price */}
+              <div>
+                <label htmlFor={`unit_price-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
+                  سعر الوحدة
+                </label>
+                <input
+                  type="number"
+                  id={`unit_price-${index}`}
+                  name="unit_price"
+                  value={item.unit_price}
+                  onChange={(e) => handleItemChange(index, e)}
+                  required
+                  step="0.01"
+                  min="0"
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  disabled={isFieldDisabled('items')}
+                />
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={handleAddPrintJobItem}
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md shadow-sm hover:bg-blue-600 transition duration-300 ease-in-out flex items-center justify-center"
+            disabled={isFieldDisabled('items')}
           >
-            <option value="">اختر نوع الطباعة...</option>
-            {PRINT_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Size */}
-        <div>
-          <label htmlFor="size" className="block text-sm font-medium text-gray-700 mb-1">
-            الحجم
-          </label>
-          <select
-            id="size"
-            name="size"
-            value={formData.size}
-            onChange={handleChange}
-            className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            disabled={isFieldDisabled('size')}
-          >
-            <option value="">اختر الحجم...</option>
-            {SIZE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Total Amount */}
-        <div>
-          <label htmlFor="total_amount" className="block text-sm font-medium text-gray-700 mb-1">
-            المبلغ الكلي
-          </label>
-          <input
-            type="number"
-            id="total_amount"
-            name="total_amount"
-            value={formData.total_amount}
-            onChange={handleChange}
-            required
-            step="0.01"
-            className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            disabled={isFieldDisabled('total_amount')}
-          />
-        </div>
-
-        {/* Paid Amount */}
-        <div>
-          <label htmlFor="paid_amount" className="block text-sm font-medium text-gray-700 mb-1">
-            المبلغ المدفوع
-          </label>
-          <input
-            type="number"
-            id="paid_amount"
-            name="paid_amount"
-            value={formData.paid_amount}
-            onChange={handleChange}
-            required
-            step="0.01"
-            className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            disabled={isFieldDisabled('paid_amount')}
-          />
+            <PlusIcon className="h-5 w-5 mr-2" /> إضافة عنصر طباعة
+          </button>
         </div>
 
         {/* Financial Status (Read-only) */}
@@ -449,6 +548,22 @@ function PrintJobForm({ onPrintJobSaved, printJobId, initialData, isManager }) {
             rows="3"
             className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             disabled={isFieldDisabled('notes')}
+          ></textarea>
+        </div>
+
+        {/* Design File Info */}
+        <div>
+          <label htmlFor="design_file_info" className="block text-sm font-medium text-gray-700 mb-1">
+            معلومات ملف التصميم
+          </label>
+          <textarea
+            id="design_file_info"
+            name="design_file_info"
+            value={formData.design_file_info}
+            onChange={handleChange}
+            rows="3"
+            className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            disabled={isFieldDisabled('design_file_info')}
           ></textarea>
         </div>
 

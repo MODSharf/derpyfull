@@ -74,30 +74,12 @@ class PrintJob(models.Model):
         ('incomplete', 'غير مكتملة'),
         ('completed', 'مكتملة'),
     )
-    PRINT_TYPE_CHOICES = (
-        ('digital', 'طباعة رقمية'),
-        ('offset', 'طباعة أوفست'),
-        ('large_format', 'طباعة كبيرة الحجم'),
-        ('screen_printing', 'طباعة سلك سكرين'),
-        ('other', 'أخرى'),
-    )
-    SIZE_CHOICES = (
-        ('A4', 'A4'),
-        ('A3', 'A3'),
-        ('A2', 'A2'),
-        ('A1', 'A1'),
-        ('custom', 'مقاس خاص'),
-    )
-
     receipt_number = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name='رقم الإيصال')
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='print_jobs', verbose_name='العميل')
-    print_type = models.CharField(max_length=50, choices=PRINT_TYPE_CHOICES, verbose_name='نوع الطباعة')
-    size = models.CharField(max_length=50, choices=SIZE_CHOICES, verbose_name='المقاس')
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='المبلغ الإجمالي')
-    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name='المبلغ المدفوع')
     delivery_date = models.DateField(verbose_name='تاريخ التسليم المتوقع')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='الحالة')
     notes = models.TextField(blank=True, null=True, verbose_name='ملاحظات')
+    design_file_info = models.TextField(blank=True, null=True, verbose_name='معلومات ملف التصميم') # New field
     financial_status = models.CharField(max_length=20, choices=FINANCIAL_STATUS_CHOICES, default='incomplete', verbose_name='الحالة المالية')
     issued_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='issued_print_jobs', verbose_name='صدر عن')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
@@ -115,38 +97,65 @@ class PrintJob(models.Model):
         return f"طلب طباعة #{self.receipt_number or self.id} - {self.client.name}"
 
     @property
+    def total_amount(self):
+        return sum(item.total_price for item in self.items.all())
+
+    @property
+    def paid_amount(self):
+        return sum(receipt.paid_amount for receipt in self.payment_receipts.all() if receipt.receipt_type == 'printing')
+
+    @property
     def remaining_amount(self):
         return self.total_amount - self.paid_amount
 
     def save(self, *args, **kwargs):
-        is_new = self._state.adding
-        old_status = None
-        if not is_new:
-            old_status = PrintJob.objects.get(pk=self.pk).status
+        super().save(*args, **kwargs)
 
-        # Auto-update financial_status
-        if self.paid_amount >= self.total_amount:
-            self.financial_status = 'completed'
-        else:
-            self.financial_status = 'incomplete'
+# ===========================================================================
+# نموذج عنصر طلب الطباعة (جديد)
+# ===========================================================================
+class PrintJobItem(models.Model):
+    PRINT_TYPE_CHOICES = (
+        ('digital', 'طباعة رقمية'),
+        ('offset', 'طباعة أوفست'),
+        ('large_format', 'طباعة كبيرة الحجم'),
+        ('screen_printing', 'طباعة سلك سكرين'),
+        ('other', 'أخرى'),
+    )
+    SIZE_CHOICES = (
+        ('A4', 'A4'),
+        ('A3', 'A3'),
+        ('A2', 'A2'),
+        ('A1', 'A1'),
+        ('custom', 'مقاس خاص'),
+    )
+    MATERIAL_CHOICES = (
+        ('paper', 'ورق'),
+        ('cardboard', 'كرتون'),
+        ('vinyl', 'فينيل'),
+        ('fabric', 'قماش'),
+        ('other', 'أخرى'),
+    )
 
-        if not self.receipt_number:
-            now = timezone.now()
-            super().save(*args, **kwargs)
-            self.receipt_number = f"PRN-{now.strftime('%Y%m%d%H%M%S')}-{self.id}"
-            self.save(update_fields=['receipt_number'])
-        else:
-            super().save(*args, **kwargs)
+    print_job = models.ForeignKey(PrintJob, on_delete=models.CASCADE, related_name='items', verbose_name='طلب الطباعة')
+    description = models.TextField(verbose_name='الوصف')
+    print_type = models.CharField(max_length=50, choices=PRINT_TYPE_CHOICES, verbose_name='نوع الطباعة')
+    size = models.CharField(max_length=50, choices=SIZE_CHOICES, verbose_name='المقاس')
+    material = models.CharField(max_length=50, choices=MATERIAL_CHOICES, blank=True, null=True, verbose_name='الخامة')
+    quantity = models.IntegerField(verbose_name='الكمية')
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='سعر الوحدة')
+    notes = models.TextField(blank=True, null=True, verbose_name='ملاحظات العنصر')
 
-        # Signal for alert management
-        if not is_new and old_status != 'delivered' and self.status == 'delivered':
-            from django.db.models.signals import post_save
-            from django.dispatch import receiver
-            from .signals import handle_job_delivered
-            post_save.connect(handle_job_delivered, sender=PrintJob)
-            # Disconnect immediately after use to prevent multiple connections
-            post_save.disconnect(handle_job_delivered, sender=PrintJob)
-            handle_job_delivered(sender=PrintJob, instance=self, created=False, **kwargs)
+    class Meta:
+        verbose_name = 'عنصر طلب طباعة'
+        verbose_name_plural = 'عناصر طلبات الطباعة'
+
+    def __str__(self):
+        return f"{self.quantity} x {self.description} ({self.print_type})"
+
+    @property
+    def total_price(self):
+        return self.quantity * self.unit_price
 
 # ===========================================================================
 # نموذج باقة التصوير (جديد) - تم إضافة الحقول هنا

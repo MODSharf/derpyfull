@@ -333,12 +333,18 @@ function PrintJobsTab({ onViewClientDetails }) {
                           'غير معروف'
                         )}
                       </p>
-                      <p className="text-gray-700 mb-1">
-                        <span className="font-semibold">النوع:</span> {job.print_type_display}
-                      </p>
-                      <p className="text-gray-700 mb-1">
-                        <span className="font-semibold">الحجم:</span> {job.size_display}
-                      </p>
+                      {job.items && job.items.length > 0 && (
+                        <div className="mb-2">
+                          <span className="font-semibold">العناصر:</span>
+                          <ul className="list-disc list-inside text-sm ml-2">
+                            {job.items.map((item, itemIndex) => (
+                              <li key={itemIndex} className="text-gray-600">
+                                {item.quantity} x {item.description} ({item.print_type_display}, {item.size_display}{item.material_display ? `, ${item.material_display}` : ''}) - {parseFloat(item.total_price).toFixed(2)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       <p className="text-gray-700 mb-1">
                         <span className="font-semibold">المبلغ الكلي:</span> {parseFloat(job.total_amount).toFixed(2)}
                       </p>
@@ -360,6 +366,11 @@ function PrintJobsTab({ onViewClientDetails }) {
                       {job.notes && (
                         <p className="text-gray-700 mb-1">
                           <span className="font-semibold">ملاحظات:</span> {job.notes}
+                        </p>
+                      )}
+                      {job.design_file_info && (
+                        <p className="text-gray-700 mb-1">
+                          <span className="font-semibold">ملف التصميم:</span> {job.design_file_info}
                         </p>
                       )}
                     </div>
@@ -416,7 +427,7 @@ function PrintJobsTab({ onViewClientDetails }) {
               </div>
             ) : (
               // List View
-              <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+              <div className="bg-white shadow-lg rounded-lg overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -427,10 +438,7 @@ function PrintJobsTab({ onViewClientDetails }) {
                         العميل
                       </th>
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        النوع
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        الحجم
+                        العناصر
                       </th>
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         المبلغ الكلي
@@ -446,6 +454,9 @@ function PrintJobsTab({ onViewClientDetails }) {
                       </th>
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         الحالة
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ملف التصميم
                       </th>
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         الإجراءات
@@ -472,10 +483,17 @@ function PrintJobsTab({ onViewClientDetails }) {
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          {job.print_type_display}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          {job.size_display}
+                          {job.items && job.items.length > 0 ? (
+                            <ul className="list-disc list-inside text-xs">
+                              {job.items.map((item, itemIndex) => (
+                                <li key={itemIndex}>
+                                  {item.quantity} x {item.description} ({item.print_type_display})
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            'لا توجد عناصر'
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                           {parseFloat(job.total_amount).toFixed(2)}
@@ -493,6 +511,9 @@ function PrintJobsTab({ onViewClientDetails }) {
                           <span className={`font-semibold ${getStatusColorClass(job.status)}`}>
                             {job.status_display}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {job.design_file_info || '--'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex gap-2">
