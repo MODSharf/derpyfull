@@ -1,5 +1,3 @@
-# C:\Users\SAMAH\Downloads\api\stapi\print\models.py
-
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -286,7 +284,7 @@ class PhotoSession(models.Model):
             now = timezone.now()
             super().save(*args, **kwargs)
             self.receipt_number = f"PHO-{now.strftime('%Y%m%d%H%M%S')}-{self.id}"
-            self.save(update_fields=['receipt_number'])
+            self.save(update_fields=['receipt_number']) # حفظ مرة أخرى لتحديث رقم الإيصال
         else:
             super().save(*args, **kwargs)
 

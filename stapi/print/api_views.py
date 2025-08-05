@@ -1,5 +1,3 @@
-# C:\Users\SAMAH\Downloads\api\stapi\print\api_views.py
-
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -261,7 +259,7 @@ class PrintJobViewSet(viewsets.ModelViewSet):
         if search_term:
             queryset = queryset.filter(
                 Q(receipt_number__icontains=search_term) |
-                Q(client__icontains=search_term) |
+                Q(client__name__icontains=search_term) |
                 Q(notes__icontains=search_term)
             )
         return queryset
@@ -277,7 +275,7 @@ class PrintJobViewSet(viewsets.ModelViewSet):
         print_job.refresh_from_db()
 
         # Initial payment handling (if any)
-        initial_paid_amount = Decimal(str(self.request.data.get('paid_amount', 0)))
+        initial_paid_amount = Decimal(str(self.request.data.get('paid_amount', 0))) # Get paid_amount from request data
         
         # Ensure initial_paid_amount does not exceed total_amount
         if initial_paid_amount > print_job.total_amount:
@@ -353,7 +351,12 @@ class PrintJobViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # Removed duplicate payment_receipts_list action
+    @action(detail=True, methods=['get'], url_path='payment-receipts')
+    def payment_receipts_list(self, request, pk=None):
+        print_job = self.get_object()
+        receipts = print_job.payment_receipts.all().order_by('-date_issued')
+        serializer = PaymentReceiptSerializer(receipts, many=True)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['get'], url_path='generate-final-invoice')
     def generate_final_invoice(self, request, pk=None):
@@ -524,7 +527,7 @@ class PhotoSessionViewSet(viewsets.ModelViewSet):
         if search_term:
             queryset = queryset.filter(
                 Q(receipt_number__icontains=search_term) |
-                Q(client__icontains=search_term) |
+                Q(client__name__icontains=search_term) |
                 Q(location__icontains=search_term) |
                 Q(notes__icontains=search_term)
             )

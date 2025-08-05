@@ -1,5 +1,3 @@
-# stapi/print/serializers.py
-
 from django.utils import timezone
 import re
 from rest_framework import serializers
@@ -158,8 +156,8 @@ class PaymentReceiptSerializer(serializers.ModelSerializer):
     photography_session_id = serializers.PrimaryKeyRelatedField(source='photography_session', read_only=True)
     photography_session_receipt_number = serializers.CharField(source='photography_session.receipt_number', read_only=True)
     photography_session_total_amount = serializers.DecimalField(source='photography_session.total_amount', max_digits=10, decimal_places=2, read_only=True)
-    photography_session_paid_amount = serializers.DecimalField(source='photography_session.paid_amount', max_digits=10, decimal_places=2, read_only=True)
-    photography_session_remaining_amount = serializers.DecimalField(source='photography_session.remaining_amount', max_digits=10, decimal_places=2, read_only=True)
+    photography_session_paid_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    photography_session_remaining_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
 
     class Meta:
